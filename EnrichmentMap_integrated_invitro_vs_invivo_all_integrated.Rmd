@@ -1,0 +1,221 @@
+---
+title: "R Notebook for EnrichmentMap between in-vitro and in-vivo sample (integrated)"
+output:
+  html_document:
+    df_print: paged
+---
+
+```{r}
+library(igraph)
+library(knitr)
+library(Seurat)
+library(dplyr)
+```
+
+Define Hypergeometric test
+
+```{r}
+###
+# Simple Fisher's exact test (hypergeometric distribution)
+###
+hyper<-function(A,B,N,alpha=1){
+  K<-length(A);
+  M<-length(B);
+  
+  if(K==0 || M ==0){
+    return(1);
+  }
+  
+  both<-length(intersect(A,B));
+  
+  #if(both > 0){    #alpha*K*M/N
+  AOnly<-length(setdiff(A,B));
+  BOnly<-length(setdiff(B,A));
+  Reminder<-N-both-AOnly-BOnly;
+  tab<-matrix(c(Reminder,  BOnly, AOnly, both),2,2);
+  dimnames(tab)<-list(0:1,0:1);
+  f<-fisher.test(tab,alternative="greater");
+  pVal<-f$p.value;
+  or<-f$estimate;
+  return(c(pVal,or));
+}
+
+
+
+###
+# Produce a matrix for hypergeometric test p-value
+###
+hyperTest<-function(l,N,alpha=1){
+  n<-length(l);
+  p<-matrix(0,n,n);
+  or<-matrix(0,n,n);
+  for(i in 1:n){
+    print(paste("Testing", i));
+    for(j in 1:n){
+      h<-hyper(l[[i]],l[[j]],N,alpha);
+      p[i,j]<-h[1];
+      or[i,j]<-h[2];
+    }
+  }
+  dimnames(p)<-list(names(l),names(l));
+  dimnames(or)<-list(names(l),names(l));
+  return(list(p=p,or=or));
+}
+
+###
+# Produce a matrix for hypergeometric test p-value
+###
+hyperTestBipartite<-function(l1,l2,N,alpha=1){
+  n1<-length(l1);
+  n2<-length(l2);
+  p<-matrix(0,n1,n2);
+  or<-matrix(0,n1,n2);
+  for(i in 1:n1){
+    print(paste("Testing", i));
+    for(j in 1:n2){
+      h<-hyper(l1[[i]],l2[[j]],N,alpha=alpha);
+      p[i,j]<-h[1];
+      or[i,j]<-h[2];
+    }
+  }
+  dimnames(p)<-list(names(l1),names(l2));
+  dimnames(or)<-list(names(l1),names(l2));
+  return(list(p=p,or=or));
+}
+```
+
+Data preprocessing
+
+```{r}
+setwd("D:/NANTES/NANTES_genelist/EnrichmentMap/GuangzhouLab/all_gene/")
+# read file
+
+int_dat <- read.csv("2023-04-20-SeuratIntegrated_EUxCFSEU.0.3.all.markers.csv")
+ncc_dat <- read.csv("2023-03-09_NCC.0.2.all.markers.CSV")
+# guangzhou sample
+s3_dat <- read.csv("../2023-05-11-Integrated_7week4&3.markers.csv")
+int_dat <- int_dat %>%  group_by(cluster) %>% slice_max(n = 100, order_by = avg_log2FC)
+ncc_dat <- ncc_dat %>%  group_by(cluster) %>% slice_max(n = 100, order_by = avg_log2FC)
+s3_dat <- s3_dat %>%  group_by(cluster) %>% slice_max(n = 100, order_by = avg_log2FC)
+
+# get only list of genes and clusters
+NCC <- as.list(split(ncc_dat$gene, ncc_dat$cluster))
+INT <- as.list(split(int_dat$gene, int_dat$cluster))
+S3 <- as.list(split(s3_dat$gene, s3_dat$cluster))
+
+
+# assign cluster names to number
+names(S3)<- paste0("7week3&4_",names(S3))
+names(INT) <- paste0("Integrated_EU&CFS_",names(INT))
+names(NCC) <- c("NCC_Sclerotome", "NCC_Somitic_mesoderm", "NCC_Paraxial_mesoderm",
+                "NCC_Axial_skeletal_system", "NCC_Notochord")
+
+# perform Ficher test among samples 
+# use N and cutoff 10 is good
+N <- 3000
+N2 <- 10000
+N3 <- 5000
+# N3 <- 5000
+test_INTxNCC_name <- hyperTestBipartite(INT,NCC,N=N)
+test_S3xINT_name <- hyperTestBipartite(S3,INT,N=N3)
+test_S3xNCC_name <- hyperTestBipartite(S3,NCC,N=N3)
+```
+
+Prepare matrix for network visualization
+
+```{r}
+# add -log10(p) column
+test_INTxNCC_name$`-log10(p)` <- -log10(test_INTxNCC_name$p)
+test_S3xINT_name$`-log10(p)` <- -log10(test_S3xINT_name$p)
+test_S3xNCC_name$`-log10(p)` <- -log10(test_S3xNCC_name$p)
+
+
+INTxNCC_table <- as.data.frame(as.table(test_INTxNCC_name$`-log10(p)`))
+S3xINT_table <- as.data.frame(as.table(test_S3xINT_name$`-log10(p)`))
+S3xNCC_table <- as.data.frame(as.table(test_S3xNCC_name$`-log10(p)`))
+
+
+
+tbl_logpval <- rbind(INTxNCC_table, S3xINT_table,S3xNCC_table)
+
+# add odds ratio column
+INTxNCC_table <- as.data.frame(as.table(test_INTxNCC_name$or))
+S3xINT_table <- as.data.frame(as.table(test_S3xINT_name$or))
+S3xNCC_table <- as.data.frame(as.table(test_S3xNCC_name$or))
+
+
+
+tbl_or <- rbind(INTxNCC_table, S3xINT_table, S3xNCC_table)
+
+# construct a final table
+tbl_logpval$odds <- tbl_or$Freq
+colnames(tbl_logpval) <- c("source", "target", "value", "odds")
+```
+
+Network visualization
+
+```{r}
+# set pval cutoff at -log(0.00001)=5 by default and please convert the cutoff you want and put it down below
+pcutoff <- 5
+m <- tbl_logpval[tbl_logpval$value >pcutoff,]
+# lines to plot unconnected nodes
+nodes <- unique(c(tbl_logpval$source, tbl_logpval$target))
+g<- graph_from_data_frame(d=m,vertices = nodes, directed=FALSE)
+#g<- graph_from_data_frame(d=m, directed=FALSE)
+
+# define layer(s) in network - 3 in our case
+layer <- rep(3, length(V(g)$name))
+layer[grepl("Integrated_EU&CFS",V(g)$name)]=2
+layer[grepl("NCC_",V(g)$name)]=3
+layer[grepl("7week3&4_",V(g)$name)]=1
+
+
+names<- V(g)$name
+names<-sub("Integrated_EU&CFS_","", names)
+names<-sub("NCC_","", names)
+names<-sub("7week3&4_","", names)
+V(g)$name = names
+V(g)$name <- c("AP", "CM", "End","NE","NMP","NO","L/PMP","PS","hChon","hCT", "hCycle","hEC","hImmune", "hMuscle","hNC","hNeuron","Sclerotome","Somitic mesoderm", "Lateral/paraxial mesoderm", "Axial skeleton system development","Notochord")
+
+layout <- layout_with_sugiyama(g, layers=layer, vgap = 1.5)
+E(g)$width <- E(g)$value
+# V(g)$vertex_degree <-  degree(g)*7 # size of vertex
+
+
+# "#DEEBF7" "#C6DBEF" "#9ECAE1" "#6BAED6" "#4292C6" "#2171B5" "#084594" "darkblue"
+
+color_pal <- c("#C6DBEF","#4292C6", "#063970","#6BAED6", "#2171B5" ,"#084594", "#9ECAE1", "#DEEBF7", "#EE9A00", "#EE9A00", "#EE9A00", "#EE9A00", "#EE9A00", "#EE9A00", "#EE9A00", "#EE9A00","#F8C8DC","#F8C8DC",
+ "#F8C8DC","#F8C8DC","#F8C8DC")
+ 
+
+title <- paste0("Plot High res Hypergeometric test")
+plot_filename <- paste0(title, ".png")
+#png(plot_filename, width = 1840, height = 1024)
+par(mar=c(0,0,3,0))
+# plot network
+# use vertex.label=NA to hide the dot
+plot(g,
+     layout=cbind(layer,layout$layout[,1]),
+     edge.curved=0,
+     vertex.shape=c("circle","circle","circle")[layer],
+     vertex.frame.color =color_pal,
+     vertex.color = color_pal,
+     vertex.label.color="black",
+     vertex.label.font=1,
+     vertex.label.family="Arial",
+     vertex.label.family="Arial",
+     vertex.size=14,
+     vertex.label.dist=c(0,0,0)[layer],
+     vertex.label.degree=0, 
+     vertex.label.cex=1.2,
+     edge.label = paste0("       ", round(E(g)$width,2),"\n"),
+     edge.label.family="Arial",
+     edge.label.color="black",
+     edge.color = "lightgrey"
+)
+title(title, cex.main=1)
+
+legend("bottomright", legend=levels(as.factor(c("7week3&4","Integrated CFSEUxEU", "NCC"))), col = c("olivedrab", "pink","orangered") , bty = "n", pch=10 , pt.cex = 1, cex = 1, text.col= c("olivedrab", "pink","orangered"), horiz = FALSE, inset = c(0.01, 0.01))
+#dev.off()
+
+```
