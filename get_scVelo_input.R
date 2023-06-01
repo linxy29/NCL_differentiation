@@ -5,7 +5,7 @@ library(tidyverse)
 
 
 pathSPC = "/storage/holab/linxy/iPSC/veloAE/"  ## for server
-sample = "cfs"
+sample = "cfseu"
 #pathSPC = "/mnt/d/Data"   ## for WSL
 #pathSPC = "D:/Data"    ## for windows
 options(future.globals.maxSize = 40000 * 1024^2)
