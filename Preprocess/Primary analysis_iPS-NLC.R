@@ -217,3 +217,28 @@ base_plot <- DimPlot(ips2nc_sctrans, reduction = reduction_used, label = TRUE, p
 plot_cellline <- DimPlot(object = ips2nc_sctrans, group.by = 'cellline', ncol = 1 , pt.size = 0.5, reduction = reduction_used, label = FALSE, cols = color_labels)
 
 plot_cellline + inset_element(base_plot, left = 0.8, bottom = 0.6, right = 1.2, top = 1.1)
+
+## Cluster markers {.tabset}
+
+### Top20, TOP50, TOP100
+
+# find markers for every cluster compared to all remaining cells, report only the positive ones
+
+Idents(ips2nc_sctrans)<-ips2nc_sctrans@meta.data$SCT_snn_res.0.4
+ips2nc_markers <- FindAllMarkers(ips2nc_sctrans, only.pos = TRUE, min.pct = 0.1, logfc.threshold = 0.25)
+write.csv2(ips2nc_markers, paste0("../results/res0.4__ips2nc_markers.csv"))
+
+
+ips2nc_markers <- filter(ips2nc_markers, p_val_adj<0.05)
+top20 <- ips2nc_markers %>% group_by(cluster) %>% slice_max(n = 20, order_by = avg_log2FC)
+top20[]
+write.csv2(ips2nc_markers, paste0("../results/res0.4__ips2nc_markers_top20.csv"))
+
+top50 <- ips2nc_markers %>% group_by(cluster) %>% slice_max(n = 50, order_by = avg_log2FC)
+top50[]
+write.csv2(ips2nc_markers, paste0("../results/res0.4__ips2nc_markers_top50.csv"))             
+
+top100 <- ips2nc_markers %>% group_by(cluster) %>% slice_max(n = 100, order_by = avg_log2FC)
+top100[]
+write.csv2(ips2nc_markers, paste0("../results/res0.4__ips2nc_markers_top100.csv"))
+
