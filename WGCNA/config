@@ -1,0 +1,14 @@
+{
+    "TF" : "{gene_list}",
+    "MAX_BLOCKSIZE" : "15000",
+    "ANNOTATION": "{meta_data}",
+    "EXPR" :"{matrix expression}",
+    "WD":"{working directory}",
+    "MIN_SOFTPOWER":"{value}",
+    "MAX_SOFTPOWER":"{value}",
+    "SCRIPT_WGCNA":"scripts/wgcna.R",
+    "SCRIPT_HEATMAP":"scripts/heatmap.R",
+    "SCRIPT_SOFTPOWER": "scripts/softpower.R",
+    "OUTPUT_FOLDER":"WGCNA"
+} 
+
