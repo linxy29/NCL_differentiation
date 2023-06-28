@@ -1,0 +1,30 @@
+name: /CONDAS/users/nantunes/nextflow
+channels:
+  - conda-forge
+  - defaults
+  - bioconda
+dependencies:
+  - _libgcc_mutex=0.1=conda_forge
+  - _openmp_mutex=4.5=1_gnu
+  - c-ares=1.18.1=h7f98852_0
+  - ca-certificates=2021.10.8=ha878542_0
+  - coreutils=8.25=1
+  - curl=7.80.0=h494985f_1
+  - krb5=1.19.2=h48eae69_3
+  - libcurl=7.80.0=h494985f_1
+  - libedit=3.1.20191231=he28a2e2_2
+  - libev=4.33=h516909a_1
+  - libgcc=7.2.0=h69d50b8_2
+  - libgcc-ng=11.2.0=h1d223b6_11
+  - libgomp=11.2.0=h1d223b6_11
+  - libnghttp2=1.43.0=ha19adfc_1
+  - libssh2=1.10.0=ha35d2d1_2
+  - libstdcxx-ng=11.2.0=he4da1e4_11
+  - libzlib=1.2.11=h36c2ea0_1013
+  - ncurses=6.2=h58526e2_4
+  - nextflow=21.10.0=h4a94de4_0
+  - openjdk=10.0.2=h14c3975_1015
+  - openssl=3.0.0=h7f98852_2
+  - tk=8.6.11=h27826a3_1
+  - zlib=1.2.11=h36c2ea0_1013
+prefix: /CONDAS/users/nantunes/nextflow
