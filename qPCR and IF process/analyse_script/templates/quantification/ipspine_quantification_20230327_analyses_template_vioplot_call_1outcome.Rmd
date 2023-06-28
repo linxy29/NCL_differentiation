@@ -1,0 +1,10 @@
+```{r, results = "asis"}
+
+call_vioplot_1outcome <- function(out) {
+   prefix <- out
+   res <- knitr::knit_expand(file = file.path("templates","quantification","ipspine_quantification_20230327_analyses_template_vioplot_1outcome.Rmd"), out = out, prefix = prefix)
+   res2 = knitr::knit_child(text = res, quiet = TRUE)
+   cat(res2, sep = '\n')
+}
+cache = lapply(outcomes_vec, call_vioplot_1outcome)
+```

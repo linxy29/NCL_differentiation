@@ -1,0 +1,77 @@
+---
+title: Cleaning of ipsinie quantification raw data of 27 march 2023
+author: Antoine Humeau
+date: '`r Sys.time()`'
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
+output:
+   html_document:
+     code_folding: hide
+     fig_caption: yes
+     highlight: tango
+     number_section: yes
+     theme: cosmo
+     toc: yes
+     toc_float: yes
+     keep_md: no
+     df_print: paged
+---
+
+<style>
+.main-container {
+    width: 80%;
+    max-width: inherit;
+}
+</style>
+
+```{r setup, results = "hide"}
+source(file.path("..", "R_functions", "script_raw2transform_prelude.R"))
+```
+
+# Explanation
+
+```{r path-parameters}
+input_data_folder <- file.path("..", "data","data_raw")
+input_data_name <- "ipspine_data_quantification_20230327.xlsx"
+input_data_path <- file.path(input_data_folder, input_data_name)
+
+output_data_folder <- file.path("..", "data", "data_valid")
+output_data_name <- "ipspine_data_quantification_20230327_clean.csv"
+output_data_path <- file.path(output_data_folder, output_data_name)
+```
+
+The document transform the raw data `r knitr::combine_words(input_data_name)` in the folder `r input_data_folder` into a clean valid data `r output_data_name` in the folder `r output_data_folder` with `;` as column separator. 
+
+# Load data
+```{r load, result = "hide", message = FALSE}
+na_char <- c("", "_", "N/A")
+dt_raw <- data.table(readxl::read_excel(input_data_path, col_names = T, na = na_char))
+colnames(dt_raw) <- str_to_lower(colnames(dt_raw))
+```
+
+The empty, "_" and "N/A" cells are dealt as NA. Empty columns and rows are removed. Each sheet has sub-datasets begin by the numero manip.
+
+```{r cleaning, results= "hide"}
+dt_clean <- copy(dt_raw)
+
+dt_clean[, gene_ratio_name := str_remove_all(gene_ratio_name, " ")]
+dt_clean[str_detect(gene_ratio_name, "FOXA2.{2}SOX17"),  gene_ratio_name := sapply(str_split(gene_ratio_name, "/"), function(k) paste(k[2], k[1], sep = "/"))]
+dt_clean[, gene_ratio_name := str_replace(gene_ratio_name, "/", " / ")]
+
+dt_clean[, gene_combo := str_remove_all(gene_ratio_name, "[+-]")]
+
+dt_clean[clone == "Thermo F new", clone := "THERMO F"]
+dt_clean[relative_count == "NA", relative_count := NA]
+dt_clean[, relative_count := as.numeric(as.character(relative_count))]
+
+dt_clean[, NT := str_detect(echantillon, "NT")]
+
+dt_clean[, day_NT := paste0(day, ifelse(NT == T, "_NT", ""))]
+```
+
+# Export data
+
+The exported data have `r nrow(dt_clean)` rows and `r ncol(dt_clean)` columns named: `r combine_words(colnames(dt_clean))`.
+```{r tidy-print}
+write.table(dt_clean, file.path(output_data_path), row.names = F, sep = ";")
+```
+

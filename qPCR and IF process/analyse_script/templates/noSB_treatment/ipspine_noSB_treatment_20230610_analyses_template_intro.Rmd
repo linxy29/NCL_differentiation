@@ -1,0 +1,35 @@
+
+```{r setup}
+source(file.path("..", "R_functions", "analyse_prelude.R"))
+
+input_data_folder <- file.path("..", "data","data_valid")
+input_data_name <- "ipspine_data_no_SB_20230610_clean.csv"
+input_data_path <- file.path(input_data_folder, input_data_name)
+```
+
+The data to analyses are `r input_data_name` in the `r input_data_folder` folder. 
+
+```{r load-data}
+dt_raw <- data.table::fread(input_data_path, stringsAsFactors = T)
+
+ordre_clone <- c("THERMO F" = "hiPSC a","190 PBMC" = "hiPSC b", "THERMO F NEW" = "hiPSC c",  "CLONE A" = "hiPSC d", "MIPS203.B11" = "hiPSC e", "H1" = "H1")
+
+dt_raw[, clone := factor(clone, levels = names(ordre_clone), labels = ordre_clone)]
+
+logi_in_F <- colnames(dt_raw)[which(dt_raw[,lapply(.SD, is.logical)] == T)]
+for (k in logi_in_F) dt_raw[, c(k) := as.factor(get(k))]
+
+gene_vec <- sort(levels(dt_raw$gene))
+
+outcomes_vec <- c("ct", "delta_ct", "fge", "log2_fge")
+exposures_vec <- c("gene", "exp", "day", "clone", "NOTO_mRNA")
+
+for (ou in outcomes_vec) {
+   tmp_dt <- subset_raw(dt_raw, cible = ou)
+   assign(paste0("dt_tidy_", ou), tmp_dt)
+}
+rm(tmp_dt)
+```
+
+The followings variables are outcomes: `r combine_words(outcomes_vec)`.
+The followings variables are explanatory variables: `r combine_words(exposures_vec)`.

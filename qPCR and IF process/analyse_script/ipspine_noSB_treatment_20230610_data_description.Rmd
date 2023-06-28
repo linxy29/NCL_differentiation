@@ -1,0 +1,220 @@
+---
+title: RT-qPCR Figures 1B and supplementary
+author: Antoine Humeau
+date: 2023-06-22 09:27:16
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    highlight: tango
+    number_section: yes
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    keep_md: no
+    df_print: paged
+---
+<style>
+.main-container {width: 80%;max-width: inherit;}
+</style>
+
+# load
+
+```{r setup}
+source(file.path("..", "R_functions", "analyse_prelude.R"))
+
+input_data_folder <- file.path("..", "data","data_valid")
+input_data_name <- "ipspine_data_no_SB_20230610_clean.csv"
+input_data_path <- file.path(input_data_folder, input_data_name)
+```
+
+The data to analyses are `r input_data_name` in the `r input_data_folder` folder. 
+
+```{r load-data}
+dt_raw <- data.table::fread(input_data_path, stringsAsFactors = T)
+
+ordre_clone <- c("THERMO F" = "hiPSC a","190 PBMC" = "hiPSC b", "THERMO F NEW" = "hiPSC c",  "CLONE A" = "hiPSC d", "MIPS203.B11" = "hiPSC e", "H1" = "H1")
+
+dt_raw[, clone := factor(clone, levels = names(ordre_clone), labels = ordre_clone)]
+
+logi_in_F <- colnames(dt_raw)[which(dt_raw[,lapply(.SD, is.logical)] == T)]
+for (k in logi_in_F) dt_raw[, c(k) := as.factor(get(k))]
+
+gene_vec <- sort(levels(dt_raw$gene))
+
+outcomes_vec <- c("ct", "delta_ct", "fge", "log2_fge")
+exposures_vec <- c("gene", "exp", "day", "clone", "NOTO_mRNA")
+
+for (ou in outcomes_vec) {
+   tmp_dt <- subset_raw(dt_raw, cible = ou)
+   assign(paste0("dt_tidy_", ou), tmp_dt)
+}
+rm(tmp_dt)
+```
+
+The followings variables are outcomes: `r combine_words(outcomes_vec)`.
+The followings variables are explanatory variables: `r combine_words(exposures_vec)`.
+
+
+# Outcome distribution by experimental variables
+```{r, results = "asis"}
+
+call_vioplot_1outcome <- function(out) {
+   prefix <- out
+   res <- knitr::knit_expand(file = file.path("templates","noSB_treatment","ipspine_noSB_treatment_20230610_analyses_template_vioplot_1outcome.Rmd"), out = out, prefix = prefix)
+   res2 = knitr::knit_child(text = res, quiet = TRUE)
+   cat(res2, sep = '\n')
+}
+cache = lapply(outcomes_vec, call_vioplot_1outcome)
+```
+
+
+# Fold-change at day x relative to day 0 by gene and clone for NOTO_mRNA
+
+The data used only NOTO_mRNA data.
+
+```{r {{prefix}}-bxp-gene-day-clone-param}
+theoutcome <- "log2_fge"
+
+genes_by_outcome <- lapply(theoutcome, function(k){
+   tmp_dt <- get(paste0("dt_tidy_", k))
+   find_gene <- tmp_dt[,.N, gene][N > 0, sort(as.character(gene))]
+   
+   find_gene <- tmp_dt[NOTO_mRNA == TRUE & !is.na(get(k)) & day == 7,.N, gene][N > 0, sort(as.character(gene))]
+})
+names(genes_by_outcome) <- theoutcome
+
+boxplot_by_outcome_gene_cap <- unlist(sapply(theoutcome, function(k){
+   intro <- paste0("**", str_replace_all(str_to_upper(k), "_", " "))
+   genes <- genes_by_outcome[[k]]
+   outro <- paste0("** boxplots depending on clone for NOTO_mRNA transfected cells. Number of data are above the boxes.")
+   
+   paste0(intro, " and ", genes, outro )
+}))
+```
+
+```{r {{prefix}}-bxp-gene-day-clone-function}
+boxplot_1gene_f <- function(dt, thegene, outcome, main = T, coltitle = "black", ylab = outcome){
+   
+   thedt <- dt[gene == thegene & !is.na(get(outcome))]
+   thedt[, clone := droplevels(clone)]
+   
+   means <- thedt[, list(N = .N, 
+                         mean = mean(get(outcome), na.rm = T),
+                         sd = sd(get(outcome), na.rm = T)), by = clone]
+   means[N > 1, t95 := qt(p = 0.975, df = N - 1)]
+   means[, ic_lower := mean - t95 * (sd/sqrt(N)) ]
+   means[, ic_upper := mean + t95 * (sd/sqrt(N)) ]
+   means[, x := as.integer(clone)]
+   
+   yrange <- range(c(thedt[, get(outcome)]), na.rm = T)
+ 
+   if (yrange[1] > log(100, base = 2)) yrange[1] <- log(100, base = 2)
+   if (yrange[2] < log(100, base = 2)) yrange[2] <- log(100, base = 2)
+   
+   
+   set.seed(1)
+   thebox <- stripchart(get(outcome) ~ clone, data = thedt , main = "", method = "jitter", vertical = T, ylab  = ylab, cex = 1, ylim = yrange, las = 2, pch = 1, xaxt = "n", jitter = 0.1)    
+   
+   axis(side = 1, at = means$x, labels = paste0(means$clone, " (", means$N, ")"), las = 2)
+   
+   abline(h = log(100, base = 2), col = "grey", lty = 2)
+
+   points(x = means$clone, y = means$mean, col = "#0570b0", pch = 16, cex = 1 )
+
+   if (main == T) title(main = paste(thegene), outer = F, col.main = coltitle)
+   means   
+}
+```
+
+## RT-qPCR figure sup
+
+```{r {{prefix}}-bxp-gene-day-allclone, fig.cap  = "Fold-change relative to day 0 by gene (panels) and clone (x axis, (Number of data)). blue filled points are the means.", fig.asp =2, results="asis"}
+col_pluri <-  "red4"
+col_wnt <- "red2"
+col_meso <- "green4"
+col_endo <- "orange"
+col_prim <- "pink"
+col_emt <- "purple"
+
+genes_paper <- c( 
+                 LEF1 = col_wnt, NODAL = col_wnt, LEFTY1 = col_wnt,
+                 NOTO_SYBR = col_meso, TBXT = col_meso, SHH = col_meso,
+                 NOGGIN = col_meso, SOX9 = col_meso, 
+                 FOXA2 = col_endo, SOX17 = col_endo,
+                 TBX6 = col_meso,
+                 POU5F1 = col_pluri, NANOG = col_pluri
+                  )
+
+autolayout(x = genes_paper, nc = 3, byrow = T)
+par(thepar)
+par(mar = c(4.5,1.5, 2,.5), cex.axis = .5, oma = c(1,1,0,0), cex.main = .7)
+
+sumfc7 <- lapply(1:length(genes_paper), function(k){
+   ge = names(genes_paper)[k]
+   thecol = genes_paper[k]
+   boxplot_1gene_f(dt = dt_tidy_log2_fge[NOTO_mRNA == T  & day == 7 & !is.na(log2_fge) & gene == ge], thegene = ge, outcome = "log2_fge", main = T, coltitle = thecol, ylab = "")      
+})
+mtext(side = 2, text = "Fold-Change relative to day 0", outer = T)
+mtext(side = 1, text = "Clone", outer = T)
+```
+
+## Tables of students test
+
+```{r student-tables, results="asis", eval = T}
+print_student <- lapply(1:length(sumfc7), function(k) {
+   thetable <- copy(sumfc7[[k]])
+   thetable[, t95 := round(t95, 2)]
+
+   wrap_dt(thetable, caption = paste("summary of previous figure", names(genes_paper[k]) ))
+          })
+htmltools::tagList(print_student) 
+```
+
+## RT-qPCR figure 1B
+
+```{r {{prefix}}-bxp-stem, fig.cap = "Mean relative gene expression by gene in day 2 (blue) or day 7 (green). Error bar is one standard error of the mean"}
+genes_paper2 <- c(LEF1 = col_wnt, NODAL = col_wnt, LEFTY1 = col_wnt,
+                 NOTO_SYBR = col_meso, TBXT = col_meso, SHH = col_meso,
+                 NOGGIN = col_meso, SOX9 = col_meso, 
+                 FOXA2 = col_endo, SOX17 = col_endo,
+                 TBX6 = col_meso
+                  )
+
+fig1b_gene <- c("LEF1", "NODAL", "NOTO_SYBR", "TBXT", "SHH", "NOGGIN", "SOX9", "FOXA2", "SOX17", "TBX6" )
+
+dt1b <- dt_tidy_log2_fge[gene %in% fig1b_gene & exp %in% c("20_11", "20_14", "20_16", "21_11", "21_14", "21_19", "22_09", "22_12", "22_20", "22_21") & ( day == 2 | (day == 7 & NOTO_mRNA == T)), 
+                         list(Ndata = length(which(!is.na(log2_fge))),
+                              Nclone = length(unique(clone)),
+                              min = min(log2_fge, na.rm = T),
+                              max = max(log2_fge, na.rm = T),
+                              value = mean(log2_fge, na.rm = T),
+                              sd = sd(log2_fge, na.rm = T)),
+                                 .(gene, day)][order(factor(gene, fig1b_gene), day)]
+
+dt1b[, se := sd/sqrt(Ndata)]
+dt1b[, xco := as.numeric(factor(gene, fig1b_gene)) + c(-0.2, .2)]
+
+layout(1)
+par(thepar)
+plot(1, 1, xlim = range(dt1b$xco), ylim = c(0, max(dt1b[, value + se], dt1b[,  value - se])), type = "n", xlab = "gene", ylab = "Relative gene expression / GAPDH (log 2)", xaxt = "n", yaxs = "i")
+
+abline(h = log(100, base = 2), col = "grey", lty = 2)
+
+rect(xleft = dt1b$xco - 0.15, xright = dt1b$xco + 0.15, ybottom = 0, ytop = dt1b$value, col = c("blue2", "green3"))
+arrows(x0 = dt1b$xco, y0 = dt1b[, value - se], y1 = dt1b[, value + se], code = 3, angle = 90, length = 0.05, lwd= 1)
+
+cache = sapply(1:length(fig1b_gene), function(k) {
+   axis(side = 1, at = k, fig1b_gene[k], col.axis = genes_paper2[fig1b_gene[k]], cex.axis = .5)})
+```
+
+```{r {{prefix}}-tbl_stem, results = "asis"}
+dt1b2print <- copy(dt1b)
+colnames(dt1b2print)[colnames(dt1b2print) == "value"] <- "mean"
+wrap_dt(dt1b2print, caption =  "summary by gene and day of qPCR.  sd is standard deviation and se standard error of the mean. xco is the x coordinate in the figure")
+
+```
+
+
+

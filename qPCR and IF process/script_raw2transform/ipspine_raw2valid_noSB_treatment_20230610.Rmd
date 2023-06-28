@@ -1,0 +1,434 @@
+---
+title: Cleaning of ipsinie raw data with no SB treatment of june 10 2023
+author: Antoine Humeau
+date: '`r Sys.time()`'
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
+output:
+   html_document:
+     code_folding: hide
+     fig_caption: yes
+     highlight: tango
+     number_section: yes
+     theme: cosmo
+     toc: yes
+     toc_float: yes
+     keep_md: no
+     df_print: paged
+---
+
+<style>
+.main-container {
+    width: 80%;
+    max-width: inherit;
+}
+</style>
+
+```{r setup, results = "hide"}
+source(file.path("..", "R_functions", "script_raw2transform_prelude.R"))
+```
+
+# Explanation
+
+```{r path-parameters}
+input_data_folder <- file.path("..", "data","data_raw")
+input_data_name <- "ipspine_data_no_SB_20230610.xlsx"
+input_data_path <- file.path(input_data_folder, input_data_name)
+
+output_data_folder <- file.path("..", "data", "data_valid")
+output_data_name <- str_replace(input_data_name, ".xlsx", "_clean.csv")
+output_data_path <- file.path(output_data_folder, output_data_name)
+```
+
+The document transform the raw data `r input_data_name` in the folder `r input_data_folder` into a clean valid data `r output_data_name` in the folder `r output_data_folder` with `;` as column separator. 
+
+# Load data
+```{r load, result = "hide", message = FALSE}
+names_sheets <- readxl::excel_sheets(input_data_path)
+names_sheets_clean <- str_to_lower(names_sheets) %>%
+   str_replace_all(" ", "_")
+
+na_char <- c("", "_", "N/A")
+for (x in 1:length(names_sheets)) {
+   tmp <- data.table(readxl::read_excel(input_data_path, sheet = names_sheets[x], col_names = F, na = na_char))
+   assign(x = paste0("dt_raw_", names_sheets_clean[x]), tmp)
+}
+rm(tmp)
+```
+
+The first sheet (`r knitr::combine_words(names_sheets)`) contain the data and the second sheet metadata
+The empty, "_" and "N/A" cells are dealt as NA. The sheet has sub-datasets begin by the columns names (Identifiers of samples and gene names).
+
+# Extract and clean excel file
+
+```{r cleaning-param}
+clone_names <- c("H9" = "H9", 
+                 "C19" = "C19", 
+                 "MIPS203.B11" = "MIPS", 
+                 "CLONE A" = "CLONE_A", 
+                 "THERMO F NEW" = "THERMO_F_NEW",
+                 "THERMO F" = "THERMOF",
+                 "THERMO F" = "THERMO_F",
+                 "190 PBMC" = "190__PBMC",
+                 "190 PBMC" = "190_PBMC",
+                 "190 PBMC" = "190_4F_PBMC",
+                 "190 TIE2 4F" = "190_4F_TIE2", 
+                 "190 TIE2 6F" = "190_6F_TIE2",
+                 "192 TIE2 4F" = "192_4F_TIE2",
+                 "192 TIE2 6F" = "192_6F_TIE2",
+                 "H1" = "H1"
+               )
+delta_ct_control_day <- 0 
+
+dico_clean <- rbindlist(list(
+   list(variable = "id_replicate", explanation = "Unique identifier of an experiment (replicate and experimental condition)", values = "concatenation of exp, clone, day, NOTO_mRNA, CHIr, sb, sb_day, sb_conc, replicate and extra_replicate"),
+   list(variable = "id_experiment", explanation = "Unique identifier of an experimental conditio (same for 2 replicate)", values = "concatenation of exp, clone, day, NOTO_mRNA, CHIr, sb, sb_day, sb_conc"),
+   list(variable = "gene", explanation = "The targeted gene measure by qPRC", format = "Capital lellers for gene name"),
+   list(variable = "exp_clone", explanation = "concatenation of exp and clone variable. use for extract the delta_ct_control_value"),
+   list(variable = "Echantillon", explanation = "Id of experiment without the replicate detail in the raw data"),
+   list(variable = "replicate", explanation = "replicate of experimental condition", levels = "1 or 2"),
+   list(variable = "exp", explanation = "experimental number in format yy_nn with yy the year of experiment and  nn the number of experiment in the year", format = "yy_nn"),
+   list(variable = "exp_year", explanation = "year of the experiment, from exp_year", format = "yyyy"),
+   list(variable = "exp_number", explanation = "number of the experiment in the year, from exp_year", format = "positive integer"),
+   list(variable = "day", explanation = "Day of qPCR measurerement after beginning of experimnent", levels = "0 or 2 or 3 or 5 or 7"),
+   list(variable = "clone", explanation = "Clone use for the experiment. Impute missing clone by the other data if only one clone in the sub-dataset", levels = as.character(combine_words(unique(names(clone_names)), sep = " or ", and = ""))),
+   list(variable = "NOTO_mRNA", explanation = "do NOTO rRNA transfection cell between the qPCR of days 2 and 3", levels = "TRUE or FALSE"),
+   list(variable = "CHIR", explanation = "do added 3 microMolar of CHIR", levels = "TRUE or FALSE"),
+   list(variable = "sb", explanation = "do inject sb molecule", levels = "TRUE or FALSE"),
+   list(variable = "sb_day", explanation = "Day of SB injection", levels = "1 or 2 or 3 or 5. NA for non sb condition. Impute missing day by 1."),
+   list(variable = "sb_conc", explanation = "concentration of SB injected in microMolar", levels = "5 or 10. NA for non sb condition. Impute missing data by 5."),
+   list(variable = "extra_replicate", explanation = "extra text to differenciate several run of the same experiment", levels = "A or B or C or D or E or 0 or 1 or 2 or 3 or 4 or 5 with PF at the begining in some cases"),
+   list(variable = "ct", explanation = "Cycle of threshold measure the relative concentration of the gene in the PCR", values = "ct is in range[1,40["),
+   list(variable = "ct_control_gene", explanation = "name of control gene of the experiment", levels = "GAPDH_SYBR for SYBR genes and GAPH (glyceraldehyde 3-phosphate dehydrogenase) for other genes"),
+   list(variable = "ct_control_replicate", explanation = "ct value for the control gene of the experiment for the replicate"),
+   list(variable = "cause_na", explanation = "cause for missing ct value among unmeasured gene in the experiment or out-of-range ct values (≥ 40)", levels = "unmeasure or out-of-range. NA if the data is available. The missing combination of gene x experiment are for unmeasure missing data."),
+   list(variable = "delta_ct", explanation = "difference between ct of gene of ct of control gene", values = "ct - ct_control"),
+   list(variable = "delta_ct_control", explanation = "control delta_ct for the experiment and gene ", values = "mean of 2 replicate of delta_ct at day = 0 and the same gene"),
+   list(variable = "delta_delta_ct", explanation = "difference between the delta ct and the control delta ct condition", values = "delta_ct - delta_ct_control"),
+   list(variable = "fge", explanation = "Fold gene expression of the gene", value = "2^-delta_delta_ct"),
+   list(variable = "log2_fge", explanation = "base 2 logarithm of 100 * fge")
+), use.names = T, fill = T)
+
+add_dico_info <- function(var){
+   if (var %in% dico_clean$variable) {
+      theexplanation <- dico_clean[variable == var, explanation]
+      thevalues <- dico_clean[variable == var, values]
+      thelevels <- dico_clean[variable == var, levels]
+      theformat <- dico_clean[variable == var, format]
+
+      text2print <- paste0(var, ": ", theexplanation, ".")
+      
+      if (length(thelevels) == 1) {
+         if (thelevels != "" & !is.na(thelevels)) text2print <- paste0(text2print, " It can be ", thelevels, ".")   
+      }
+      
+      if (length(thevalues) == 1) {
+         if (thevalues != "" & !is.na(thevalues)) text2print <- paste0(text2print, " It is ", thevalues, ".")   
+      }
+      
+      if (length(theformat) == 1) {
+         if (theformat != "" & !is.na(theformat)) text2print <- paste0(text2print, " It take the format ", theformat, ".")   
+      }
+      return(text2print)
+   } else {
+      stop(paste(var, "is not in the dictionnary of clean data") )
+   }
+}
+```
+
+The cleaning consists on: 
+
+* search rows for column names: begin by "Echantillon|GAPDH". If Echantillon not found, add as first column. 
+* extract the column names
+* applied on each sub-dataset contains between two rows of column names
+  * remove columns with only missing data
+  * rename the columns with the correct gene
+      * transform gene in capital
+      * if detect 2 occurence of same gene, put SYBR after the second
+      * if detect SYBR, SYBER, or endo, put SYBR after the gene name
+      * replace SNAI1 and SNAIL by SNAIL1
+      * replace NOG by NOGGIN
+      * replace PECAM by PECAM1
+  * impute the missing data of "Echantillon" column with previous data. Return an error if any Echantillon value is not present 2 or 3 times (number of replicate).
+  * Transform Echantillon in capital and replace space by `_`.
+  * Extract experimental condition variables from Echantillon
+    * `r add_dico_info("replicate")`
+    * `r add_dico_info("exp")`
+    * `r add_dico_info("exp_year")`
+    * `r add_dico_info("exp_number")`
+    * `r add_dico_info("day")`
+    * `r add_dico_info("clone")`
+    * `r add_dico_info("NOTO_mRNA")`
+    * `r add_dico_info("CHIR")`
+    * `r add_dico_info("sb")`
+    * `r add_dico_info("sb_day")`
+    * `r add_dico_info("sb_conc")`
+    * Return an error if any missing value in any experimental condition variables
+    * `r add_dico_info("extra_replicate")`
+    * `r add_dico_info("id_replicate")`
+    * `r add_dico_info("id_experiment")`
+    * `r add_dico_info("exp_clone")`
+  * Pivot in long format, one variable for gene and one for ct. 
+  
+The process is in the cleaning_one_sheet function and applied on sheet.
+
+```{r cleaning-functions}
+cleaning_subdataset <- function(subdt, col.names, sheet_name_input) {
+   kept_non_missing_col <- which(apply(subdt, 2, function(j) !all(is.na(j))))
+
+   tidy_subdt <- subdt[, ..kept_non_missing_col]
+   
+   col.names <- str_to_upper(col.names)
+   which_sybr <- str_detect(col.names, "(SYBE?R)|(endo)")
+   clean_names <- str_remove(col.names, "(SYBE?R)|(endo)") %>%
+      str_squish() %>%
+      str_remove("^(_)") %>%
+      str_replace("É", "E")
+   
+   clean_names[which_sybr] <- paste0(clean_names[which_sybr], "_SYBR")
+   clean_names[clean_names %in% c("SNAI1", "SNAIL")] <- "SNAIL1"
+   clean_names[clean_names %in% c("NOG")] <- "NOGGIN"
+   clean_names[clean_names %in% c("PECAM")] <- "PECAM1"
+   clean_names[clean_names %in% c("T")] <- "TBXT"
+   
+   if (!"ECHANTILLON" %in% clean_names) clean_names <- c("ECHANTILLON", clean_names)
+
+   count_name <- table(clean_names)
+   double_name <- names(count_name[count_name == 2])
+   
+   if (length(double_name) > 0) {
+      for (do in double_name) {
+         clean_names[clean_names == do] <- c(do, paste0(do, "_SYBR"))   
+      }
+   } 
+   if (any(count_name > 2)) stop("some name of gene have more than 2 occcurence in sub-dataset, and it is not manages")
+   
+   colnames(tidy_subdt) <- clean_names[kept_non_missing_col]
+
+   tidy_subdt[, ECHANTILLON := zoo::na.locf(ECHANTILLON, na.rm = F, fromLast = F)]
+  
+   check_echantillon <- tidy_subdt[, .N, ECHANTILLON][N != 2 & N != 3]
+   if (nrow(check_echantillon) > 0) {
+      print(check_echantillon)
+      stop("The previous table show the Echantillons without 2 or 3 data rows")
+      
+   }
+   
+   gene_cols <- setdiff(colnames(tidy_subdt), "ECHANTILLON")
+
+   tidy_subdt[, ECHANTILLON := str_to_upper(ECHANTILLON)]
+   tidy_subdt[, ECHANTILLON := str_replace_all(ECHANTILLON, " ", "_")]
+ 
+   extract_echan <- as.integer(as.factor(tidy_subdt[, ECHANTILLON]))
+   diff_echan <- c(1, diff(extract_echan)) != 0
+   tidy_subdt[, replicate := abs(diff_echan - 1) + 1]
+   
+   therep <- 1
+   for (ind in 2:length(extract_echan)) {
+      if (extract_echan[ind] == extract_echan[ind - 1]) {
+         therep[ind] <- last(therep) + 1
+      } else {
+         therep[ind] <- 1
+      }
+   }
+   
+   tidy_subdt[, replicate := therep]
+  
+   tidy_subdt[, exp := str_extract(ECHANTILLON, "^([0-9]{2}-[0-9]{2})")]
+   
+   tidy_subdt[, exp := str_replace(exp, "-", "_")]
+   tidy_subdt[, exp_year := as.integer(paste0("20", str_sub(exp, 1,2)))]
+   tidy_subdt[, exp_number := as.integer(str_sub(exp, 4,5))]
+   
+   tidy_subdt[, day := str_extract(ECHANTILLON, "([TD] ?[02357])")]
+   tidy_subdt[, day := as.integer(str_extract(day, "[02357]"))]
+  
+   tidy_subdt[, clone := str_extract(ECHANTILLON, paste0("(", paste(clone_names, collapse = ")|("),")"))]
+   tidy_subdt[is.na(clone), clone := sheet_name_input]
+
+   tidy_subdt[, clone := factor(clone, levels = clone_names, labels = names(clone_names))]
+
+   tidy_subdt[, NOTO_mRNA := str_detect(ECHANTILLON, "NOTO") ]
+   tidy_subdt[, CHIR := str_detect(ECHANTILLON, "3C") ]
+   tidy_subdt[, sb := str_detect(ECHANTILLON, "SB") ]
+   
+   # check extractions
+   nonacols <- c("replicate", "exp", "exp_year", "exp_number", "day", "clone","NOTO_mRNA", "CHIR","sb")
+   for (nonacol in nonacols) {
+      na_rows <- tidy_subdt[, which(is.na(get(nonacol)))]
+      if (length(na_rows) > 0) {
+         print(tidy_subdt[na_rows, .SD, .SDcols = c("ECHANTILLON", nonacol)])
+         warning(paste("The previous table show data without correct extration of", nonacol, "variable"))
+      }
+   }
+   
+   tidy_subdt[sb == TRUE, sb_day := as.integer(str_extract(str_extract(ECHANTILLON, "SB.[JDT][1235]"), "[1235]" )) ]
+   tidy_subdt[sb == TRUE & is.na(sb_day), sb_day := 1]
+   
+   tidy_subdt[sb == TRUE, sb_conc := as.integer(str_extract(str_extract(ECHANTILLON, "[+]_*(5|(10)).{0,5}SB"), "(5)|(10)")) ]
+   tidy_subdt[sb == TRUE & is.na(sb_conc), sb_conc := 5]
+   
+   tidy_subdt[, extra_replicate := stringr::str_remove_all(stringr::str_extract(ECHANTILLON, "((_PF)*_[ABCDE012345])$"), "_")]
+   
+   tidy_subdt[, id_replicate := paste0(exp, "_", clone, "_D", day, "_NOTO", NOTO_mRNA,"_CHIR", CHIR, "_SB", sb, "_D", sb_day, "_C", sb_conc, "_", replicate, "_", extra_replicate)]
+   tidy_subdt[, id_experiment := paste0(exp, "_", clone, "_D", day, "_NOTO", NOTO_mRNA,"_CHIR", CHIR, "_SB", sb, "_D", sb_day, "_C", sb_conc)]
+   
+   tidy_subdt[, exp_clone := paste0(exp, "_", clone)]
+
+   tidy_subdt <- data.table(tidyr::pivot_longer(tidy_subdt, cols  = all_of(gene_cols), names_to = "gene", values_to = "ct", values_drop_na = F))
+   tidy_subdt[, ct := as.numeric(ct)]
+   colnames(tidy_subdt)[colnames(tidy_subdt) == "ECHANTILLON"] <- "Echantillon"
+   return(tidy_subdt)
+}
+
+cleaning_one_sheet <- function(dtname) {
+   dt <- get(dtname)
+   Ntot <- nrow(dt)
+   colnames_rows <- which(apply(dt, 1, function(i) any(str_detect(i, pattern = "(.chantillon)|(GAPDH)"))))
+   
+   ranges_subdt <- data.table(start = colnames_rows + 1, end = c(colnames_rows[-1] - 1, Ntot))
+   
+   colnames_list <- lapply(colnames_rows, function(i) as.vector(na.omit(unlist(dt[i,]))))
+   
+   subset_dt_clean <- lapply(1:length(colnames_rows), function(k) {
+      print(paste("Subset of dataset number", k))
+      thedt_rows <- ranges_subdt[k, ] 
+   
+      out <- cleaning_subdataset(subdt = dt[thedt_rows[,start]:thedt_rows[, end]] , col.names = colnames_list[[k]], sheet_name_input = dtname )
+   })
+   
+   subset_dt_clean_1 <- rbindlist(subset_dt_clean, use.names = T, fill = T)
+}
+```
+
+```{r cleaning, results= "hide"}
+dt_tidy_l <- lapply(names_sheets_clean[1], function(k){
+   print(paste("Sheet", k))
+   cleaning_one_sheet(paste0("dt_raw_", k))
+})
+dt_tidy <- rbindlist(dt_tidy_l, use.names = T, fill = T)
+```
+
+# Add variables
+
+The following variable are added:
+
+* `r add_dico_info("ct_control_gene")`
+* impute missing gapdh with value of other replicate
+* `r add_dico_info("ct_control_replicate")`
+* `r add_dico_info("cause_na")`
+* `r add_dico_info("delta_ct")`
+* `r add_dico_info("delta_ct_control")`
+* `r add_dico_info("delta_delta_ct")`
+* `r add_dico_info("fge")`
+* `r add_dico_info("log2_fge")`
+
+```{r add-variable, eval = T}
+dt_tidy[, ct_control_gene := ifelse(str_detect(gene, "SYBR"), "GAPDH_SYBR", "GAPDH")]
+na_gapdh_ech <- dt_tidy[is.na(ct) & gene == "GAPDH", Echantillon]
+dt_tidy[is.na(ct) & gene == "GAPDH", ct := dt_tidy[!is.na(ct) & gene == "GAPDH" & Echantillon %in% na_gapdh_ech][match(na_gapdh_ech, dt_tidy[!is.na(ct) & gene == "GAPDH" & Echantillon %in% na_gapdh_ech, Echantillon]), ct]
+]
+
+extract_ct_control_ri <- dt_tidy[gene == ct_control_gene, list(ct_control_replicate = ct), by = .(id_replicate, ct_control_gene)]
+
+error_control_ct <- extract_ct_control_ri[,.N, .(id_replicate, ct_control_gene)][N>1]
+if (nrow(error_control_ct) > 0) {
+   print(error_control_ct)
+   stop("Previous samples have duplicated rows need rename")
+}
+
+dt_clean <- merge(dt_tidy, extract_ct_control_ri, by = c("id_replicate", "ct_control_gene"), all = T)
+
+dt_clean[, cause_na := NA_character_]
+dt_clean[is.na(ct), cause_na := "unmeasure"]
+dt_clean[ct >= 40, cause_na := "out-of-range"]
+
+dt_clean[, delta_ct := ct - ct_control_replicate]
+
+extract_delta_ct <- dt_clean[day == 0, list(delta_ct = mean(delta_ct, na.rm = T)), by = .(exp_clone, gene)]
+
+dt_clean2 <- merge(dt_clean, extract_delta_ct, by = c("exp_clone", "gene"), all = T, suffixes = c("", "_control"))
+dt_clean2[, delta_delta_ct := delta_ct - delta_ct_control]
+dt_clean2[, fge := 2^(-delta_delta_ct)]
+dt_clean2[, log2_fge := log(100*fge, base = 2)]
+```
+
+# validate the clean data
+
+```{r manual_check, results = "asis"}
+if (nrow(dt_tidy) != nrow(dt_clean)) {
+   texte_error <- paste("<span style=\"color:red; font-weight:700\">",
+                        "Error: the research of ct_control have issue because dt_clean and dt_tidy  have not the same number of rows.",
+                        "</span>")
+   cat(texte_error)
+}
+
+if (nrow(dt_clean) != nrow(dt_clean2)) {
+   texte_error <- paste("<span style=\"color:red; font-weight:700\">",
+                        "Error: the research of delta_ct_control have issue because dt_clean2 and dt_clean  have not the same number of rows.",
+                        "</span>")
+   cat(texte_error)
+}
+
+check_redondant_gene <- dt_clean2[,.N, .(id_replicate, gene)][N > 1]
+if (nrow(check_redondant_gene) > 0) {
+   texte_error <- paste("<span style=\"color:red; font-weight:700\">",
+                        "Error: the following table shows the genes with repeated measures for the same id, that is normally not possible.",
+                        "</span>")
+   cat(texte_error)
+   wrap_dt(check_redondant_gene, caption = "Gene and Id with several values in the clean data. It is not possible")
+   
+}
+
+orphan_dico <- setdiff(dico_clean$variable, colnames(dt_clean2))
+if (length(orphan_dico) > 0 ) {
+    texte_error <- paste("<span style=\"color:red; font-weight:700\">",
+                        "Error: the following variables in dictionnary are not in the clean data:", combine_words(orphan_dico), 
+                        "</span>")
+   cat(texte_error) 
+}
+
+orphan_data <- setdiff(colnames(dt_clean2), dico_clean$variable)
+if (length(orphan_data) > 0 ) {
+    texte_error <- paste("<span style=\"color:red; font-weight:700\">",
+                        "Error: the following variables in clean data are not in the  dictionnary:", combine_words(orphan_data), 
+                        "</span>")
+   cat(texte_error) 
+}
+```
+
+```{r validate, fig.cap = "Figure of summary of validation rules", eval = T}
+rules <- validate::validator(
+   "replicate_levels" = replicate %vin% c(1,2, 3),
+   "exp_year_levels" = exp_year %vin% c(2019,2020,2021, 2022,2023),
+   "clone_levels" = clone %vin% c("MIPS203.B11","CLONE A", "THERMO F", "THERMO F NEW", "190 PBMC", "H1"),
+   "day_levels" = day %in% c(0,2,3,5,7),
+   var_bin := var_group(NOTO_mRNA, CHIR),
+   "bin_test" = var_bin %vin% c(FALSE, TRUE),
+   "ct_range" = in_range(ct, 1, 40),
+   "sb_day_levels" = is.na(sb_day),
+   "sb_conc_levels" = is.na(sb_conc),
+    "sb_false" = sb == FALSE, 
+    "cause_na_levels" = cause_na %vin% c("unmeasure", "out-of-range") | is.na(cause_na))
+
+check_tidy <- validate::confront(dt_clean2, rules)
+
+wrap_dt(validate::summary(check_tidy), caption = "Summary of validation rules for tidy data")
+
+validate::plot(check_tidy, fill = c("#d95f02", "#1b9e77", "#7570b3"))
+```
+
+# Export data
+
+The exported data have `r nrow(dt_clean2)` rows and `r ncol(dt_clean2)` columns named: `r combine_words(colnames(dt_clean2))`.
+```{r tidy-print}
+wrap_dt(dico_clean, caption = "Dictionnary of the clean data")
+
+write.table(dico_clean, str_replace(output_data_path, "_clean", "_clean_dictionary"), row.names = F, sep = ";")
+
+write.table(dt_clean2, file.path(output_data_path), row.names = F, sep = ";")
+```
+
+
+
+
+
