@@ -6,6 +6,9 @@ This GitHub repository contains all the scripts and main files that were used fo
 Scripts made by B. Guidoux D'Halluin, A. Camus
 
 # Complex Heatmap
+- Process_AxialSkeletonWeek7_and_draw_heatmap.R: script made to prepare Zhou et al. dataset for heatmap generation
+- Process_NotochordWeek8_and_draw_heatmap.R: script made to prepare fetal notochord dataset from this study for heatmap generation
+- Process_iPS_ESC-NLC_and_draw_heatmap.R: script made to prepare iPS/ESC-NLC integrated dataset from this study for heatmap generation
 Scripts made by B. Guidoux D'Halluin, A. Camus
 
 # Correlation
