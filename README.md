@@ -18,6 +18,11 @@ Scripts made by B. Guidoux D'Halluin, A. Camus
 Script made by V. Tam
 
 # Enrichment Map
+- TOP100_DEG_AxialSkeletonWeek7.csv: gene list of the top 100 differentially expressed genes (DEG) from AxialSkeletonWeek7 dataset used for comparison
+- TOP100_DEG_NotochordWeek8.csv: gene list of the top 100 DEG from NotochordWeek8 dataset used for comparison
+- TOP100_DEG_iPS_ESC-NLC.csv: gene list of the top 100 DEG from iPS/ESC-NLC integrated dataset used for comparison
+- EnrichmentMap_integrated_invitro_vs_invivo_all_integrated_scripts.Rmd: script used to apply hypergeometric comparison test for Enrichment Map creation
+
 Scripts made by Angela
 
 # Gene lists
