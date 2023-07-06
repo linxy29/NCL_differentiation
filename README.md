@@ -3,8 +3,15 @@
 This GitHub repository contains all the scripts and main files that were used for the paper .... analyses and figures. Additonal data and processed files can be available upon reasonable request to the corresponding authors.
 
 # CellChat
-
-TO DO: add script
+- CellChat_NOTO_SB_iPS_NLC_trimean.R: Creation and analyse of a cellchat object for the NOTO SB condition with trimean method
+- CellChat_NOTO_iPS_NLC_trimean.R: Creation and analyse of a cellchat object for the NOTO condition with trimean method
+- CellChat_NT_iPS_NLC_trimean.R: Creation and analyse of a cellchat object for the NT condition with trimean method
+- CellChat_iPS_NLC_trimean.R: Creation and analyse of a cellchat object for iPS-NLC dataset with trimean method
+- CellChat_netVisual_chord_bug_correction.R: Retrieved June 30, 2023, from https://github.com/sqjin/CellChat/issues/266
+- CellChat_tables_LR.R: Obtain a table of all the receptor ligands of the signalling pathways: COLLAGEN, HH, SEMA3 and SPP1.The tables come from the entire CellChat database, NT, NOTO and NOTO SB conditions.
+- CellChat_visualisation_LR_interaction_chord_diagram.R: Visualisation of ligands emitted by the notochord towards other clusters in the signalling pathways : COLLAGEN, HH, SEMA3 and SPP1, under NT, NOTO and NOTO SB conditions.
+- CellChat_visualisation_interaction_chord_diagram.R: Visualisation of interactions inside signalling pathways : COLLAGEN, HH, SEMA3 and SPP1, under NT, NOTO and NOTO SB conditions
+  
 Scripts made by B. Guidoux D'Halluin, A. Camus
 
 # Complex Heatmap
