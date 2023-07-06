@@ -84,6 +84,7 @@ TO DO: add script and doi to paper
 Scripts made by J. Warin and A. Camus
 # WGCNA
 TO DO: add annotation and update name of gene lists for modules described on paper
-Based on Meistermann et al. 2021 (https://doi.org/10.1016/j.stem.2021.04.027), adapted by J. Warin with the help of L. David, A. Camus
+
+Adapted from Meistermann et al. 2021 (https://doi.org/10.1016/j.stem.2021.04.027), by J. Warin with the help of L. David, A. Camus
 # qPCR and IF process
 Scripts made by A. Humeau
