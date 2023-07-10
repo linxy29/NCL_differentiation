@@ -75,7 +75,7 @@ Velocity was performed using scVelo and veloAE packages
   
 Scripts made by X. Lin
 # VennDiagram
-TO DO: add script and doi to paper
+TO DO: add doi to paper
 - VennDiagram_script: script used to compare gene lists and draw VennDiagram figure
 - genelist_human_AxialSkeletonWeek7_NotochordWeek8_vivo.txt: addition of all positive DEG from TBXT+ cell cluster from Zhou et al. 2023, and from notochord cluster in NotochordWeek8 dataset (this study)
 - genelist_iPS_ESC-NLC_vitro.txt: all positive DEG from notochord cluster in iPS/ESC-NLC dataset
