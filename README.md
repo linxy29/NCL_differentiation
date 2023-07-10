@@ -75,11 +75,10 @@ Velocity was performed using scVelo and veloAE packages
   
 Scripts made by X. Lin
 # VennDiagram
-TO DO: add doi to paper
 - VennDiagram_script: script used to compare gene lists and draw VennDiagram figure
 - genelist_human_AxialSkeletonWeek7_NotochordWeek8_vivo.txt: addition of all positive DEG from TBXT+ cell cluster from Zhou et al. 2023, and from notochord cluster in NotochordWeek8 dataset (this study)
 - genelist_iPS_ESC-NLC_vitro.txt: all positive DEG from notochord cluster in iPS/ESC-NLC dataset
-- genelist_mouse_Tamplin_Peck_Wymeersch.txt: list of mouse notochord genes extracted from Tamplin et al. 2008, Tamplin et al. 2011, Peck et al. 205, Wymeersch et al. 
+- genelist_mouse_Tamplin_Peck_Wymeersch.txt: list of mouse notochord genes extracted from Tamplin et al. 2008 (https://doi.org/10.1186/1471-2164-9-511), Tamplin et al. 2011 (https://doi.org/10.1016/j.ydbio.2011.10.002), Peck et al. 2017 (https://doi.org/10.1038/s41598-017-10692-5), Wymeersch et al. 2019 (https://doi.org/10.1242/dev.168161) 
 - intersection_human_mouse_vivo.csv: list of genes related to notochord that are shared between mouse and fetal human
 - intersection_human_vivo_vitro.csv: list of genes related to notochord that are shared between fetal human an in vitro notochordal cells
 - intersection_to_all_vitro_vivo_human_mouse.csv: list of genes related to notochord that are shared between mouse, fetal human and in vitro notochordal cells
