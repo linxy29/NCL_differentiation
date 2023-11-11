@@ -90,8 +90,6 @@ Scripts made by X. Lin
   
 Scripts made by J. Warin and A. Camus
 # WGCNA
-TO DO: add annotation and update name of gene lists for modules described on paper
-
 Adapted from Meistermann et al. 2021 (https://doi.org/10.1016/j.stem.2021.04.027), by J. Warin with the help of L. David, A. Camus
 # qPCR and IF process
 - t_test_FigureS1B: t-test pairwise comparision performed on figure S1B
