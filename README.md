@@ -1,6 +1,6 @@
 # NLC_differentiation
 
-This GitHub repository contains all the scripts and main files that were used for the paper .... analyses and figures. Additonal data and processed files can be available upon reasonable request to the corresponding authors.
+This GitHub repository contains all the scripts and main files that were used for the paper "Integration of in vitro and in vivo models defines a molecular signature reference for human embryonic notochordal cells" (under reviewing at iScience). Additonal data and processed files can be available upon reasonable request to the corresponding authors (anne.camus@univ-nantes.fr).
 
 # CellChat
 - CellChat_NOTO_SB_iPS_NLC_trimean.R: Creation and analyse of a cellchat object for the NOTO SB condition with trimean method
@@ -31,6 +31,7 @@ Script made by V. Tam
 - TOP100_DEG_NotochordWeek8.csv: gene list of the top 100 DEG from NotochordWeek8 dataset used for comparison
 - TOP100_DEG_iPS_ESC-NLC.csv: gene list of the top 100 DEG from iPS/ESC-NLC integrated dataset used for comparison
 - EnrichmentMap_integrated_invitro_vs_invivo_all_integrated_scripts.Rmd: script used to apply hypergeometric comparison test for Enrichment Map creation
+- All_Statistical_analysis_Enrichment_map.xls: all values for the statistical analysis performed to analyse similarities between datasets
 
 Scripts made by D. Yin
 
@@ -93,4 +94,7 @@ TO DO: add annotation and update name of gene lists for modules described on pap
 
 Adapted from Meistermann et al. 2021 (https://doi.org/10.1016/j.stem.2021.04.027), by J. Warin with the help of L. David, A. Camus
 # qPCR and IF process
+- t_test_FigureS1B: t-test pairwise comparision performed on figure S1B
+- Statistical_analysis_figure2E: statistical analysis to study effect of TGF-B inhibition in figure 2E
+- Rcodes: folder containing the function and scripts made to analyse qPCR and immunofluorescence quantification data
 Scripts made by A. Humeau
