@@ -1,5 +1,5 @@
 ---
-title: Cleaning of ipspine raw data with no SB treatment of june 10 2023
+title: Cleaning of ipspine raw data for triple transfection of October 03 2023
 author: Antoine Humeau
 date: '`r Sys.time()`'
 knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
@@ -31,7 +31,7 @@ source(file.path("..", "R_functions", "script_raw2transform_prelude.R"))
 
 ```{r path-parameters}
 input_data_folder <- file.path("..", "data","data_raw")
-input_data_name <- "ipspine_data_no_SB_20230610.xlsx"
+input_data_name <- "ipspine_data_3trans_20231003.xlsx"
 input_data_path <- file.path(input_data_folder, input_data_name)
 
 output_data_folder <- file.path("..", "data", "data_valid")
@@ -61,21 +61,7 @@ The empty, "_" and "N/A" cells are dealt as NA. The sheet has sub-datasets begin
 # Extract and clean excel file
 
 ```{r cleaning-param}
-clone_names <- c("H9" = "H9", 
-                 "C19" = "C19", 
-                 "MIPS203.B11" = "MIPS", 
-                 "CLONE A" = "CLONE_A", 
-                 "THERMO F NEW" = "THERMO_F_NEW",
-                 "THERMO F" = "THERMOF",
-                 "THERMO F" = "THERMO_F",
-                 "190 PBMC" = "190__PBMC",
-                 "190 PBMC" = "190_PBMC",
-                 "190 PBMC" = "190_4F_PBMC",
-                 "190 TIE2 4F" = "190_4F_TIE2", 
-                 "190 TIE2 6F" = "190_6F_TIE2",
-                 "192 TIE2 4F" = "192_4F_TIE2",
-                 "192 TIE2 6F" = "192_6F_TIE2",
-                 "H1" = "H1"
+clone_names <- c("MIPS203.B11" = "MIPS"
                )
 delta_ct_control_day <- 0 
 
@@ -84,17 +70,18 @@ dico_clean <- rbindlist(list(
    list(variable = "id_experiment", explanation = "Unique identifier of an experimental conditio (same for 2 replicate)", values = "concatenation of exp, clone, day, NOTO_mRNA, CHIr, sb, sb_day, sb_conc"),
    list(variable = "gene", explanation = "The targeted gene measure by qPRC", format = "Capital lellers for gene name"),
    list(variable = "exp_clone", explanation = "concatenation of exp and clone variable. use for extract the delta_ct_control_value"),
+    list(variable = "clone", explanation = "Clone use for the experiment. Impute missing clone by the other data if only one clone in the sub-dataset", levels = as.character(combine_words(unique(names(clone_names)), sep = " or ", and = ""))),
    list(variable = "Echantillon", explanation = "Id of experiment without the replicate detail in the raw data"),
    list(variable = "replicate", explanation = "replicate of experimental condition", levels = "1 or 2"),
    list(variable = "exp", explanation = "experimental number in format yy_nn with yy the year of experiment and  nn the number of experiment in the year", format = "yy_nn"),
    list(variable = "exp_year", explanation = "year of the experiment, from exp_year", format = "yyyy"),
    list(variable = "exp_number", explanation = "number of the experiment in the year, from exp_year", format = "positive integer"),
    list(variable = "day", explanation = "Day of qPCR measurerement after beginning of experimnent", levels = "0 or 2 or 3 or 5 or 7"),
-   list(variable = "clone", explanation = "Clone use for the experiment. Impute missing clone by the other data if only one clone in the sub-dataset", levels = as.character(combine_words(unique(names(clone_names)), sep = " or ", and = ""))),
    list(variable = "NOTO_mRNA", explanation = "do NOTO rRNA transfection cell between the qPCR of days 2 and 3", levels = "TRUE or FALSE"),
    list(variable = "CHIR", explanation = "do added 3 microMolar of CHIR", levels = "TRUE or FALSE"),
    list(variable = "sb", explanation = "do inject sb molecule", levels = "TRUE or FALSE"),
    list(variable = "sb_day", explanation = "Day of SB injection", levels = "1 or 2 or 3 or 5. NA for non sb condition. Impute missing day by 1."),
+   list(variable = "transfection_nb", explanation = "Number of transfection", levels = "1 or 2 or 3. NA for non sb condition"),
    list(variable = "sb_conc", explanation = "concentration of SB injected in microMolar", levels = "5 or 10. NA for non sb condition. Impute missing data by 5."),
    list(variable = "extra_replicate", explanation = "extra text to differenciate several run of the same experiment", levels = "A or B or C or D or E or 0 or 1 or 2 or 3 or 4 or 5 with PF at the begining in some cases"),
    list(variable = "ct", explanation = "Cycle of threshold measure the relative concentration of the gene in the PCR", values = "ct is in range[1,40["),
@@ -156,10 +143,10 @@ The cleaning consists on:
     * `r add_dico_info("exp_year")`
     * `r add_dico_info("exp_number")`
     * `r add_dico_info("day")`
-    * `r add_dico_info("clone")`
     * `r add_dico_info("NOTO_mRNA")`
     * `r add_dico_info("CHIR")`
     * `r add_dico_info("sb")`
+    * `r add_dico_info("transfection_nb")`
     * `r add_dico_info("sb_day")`
     * `r add_dico_info("sb_conc")`
     * Return an error if any missing value in any experimental condition variables
@@ -245,14 +232,17 @@ cleaning_subdataset <- function(subdt, col.names, sheet_name_input) {
    tidy_subdt[, clone := str_extract(ECHANTILLON, paste0("(", paste(clone_names, collapse = ")|("),")"))]
    tidy_subdt[is.na(clone), clone := sheet_name_input]
 
-   tidy_subdt[, clone := factor(clone, levels = clone_names, labels = names(clone_names))]
+   #tidy_subdt[, clone := factor(clone, levels = clone_names, labels = names(clone_names))]
 
    tidy_subdt[, NOTO_mRNA := str_detect(ECHANTILLON, "NOTO") ]
    tidy_subdt[, CHIR := str_detect(ECHANTILLON, "3C") ]
    tidy_subdt[, sb := str_detect(ECHANTILLON, "SB") ]
-   
+   tidy_subdt[, transfection_nb := str_extract(ECHANTILLON, "[123]X") ]
+
+   tidy_subdt[, transfection_nb := as.integer(str_extract(transfection_nb, "[123]")) ]
+
    # check extractions
-   nonacols <- c("replicate", "exp", "exp_year", "exp_number", "day", "clone","NOTO_mRNA", "CHIR","sb")
+   nonacols <- c("replicate", "exp", "exp_year", "exp_number", "day", "NOTO_mRNA", "CHIR","sb")
    for (nonacol in nonacols) {
       na_rows <- tidy_subdt[, which(is.na(get(nonacol)))]
       if (length(na_rows) > 0) {
@@ -269,8 +259,8 @@ cleaning_subdataset <- function(subdt, col.names, sheet_name_input) {
    
    tidy_subdt[, extra_replicate := stringr::str_remove_all(stringr::str_extract(ECHANTILLON, "((_PF)*_[ABCDE012345])$"), "_")]
    
-   tidy_subdt[, id_replicate := paste0(exp, "_", clone, "_D", day, "_NOTO", NOTO_mRNA,"_CHIR", CHIR, "_SB", sb, "_D", sb_day, "_C", sb_conc, "_", replicate, "_", extra_replicate)]
-   tidy_subdt[, id_experiment := paste0(exp, "_", clone, "_D", day, "_NOTO", NOTO_mRNA,"_CHIR", CHIR, "_SB", sb, "_D", sb_day, "_C", sb_conc)]
+   tidy_subdt[, id_replicate := paste0(exp, "_", clone, "_D", day, "_NOTO", NOTO_mRNA,"_transfection", transfection_nb, "_SB", sb, "_D", sb_day, "_C", sb_conc, "_", replicate, "_", extra_replicate)]
+   tidy_subdt[, id_experiment := paste0(exp, "_", clone, "_D", day, "_NOTO", NOTO_mRNA,"_transfection", transfection_nb, "_SB", sb, "_D", sb_day, "_C", sb_conc)]
    
    tidy_subdt[, exp_clone := paste0(exp, "_", clone)]
 
@@ -352,6 +342,14 @@ dt_clean2[, fge := 2^(-delta_delta_ct)]
 dt_clean2[, log2_fge := log(100*fge, base = 2)]
 ```
 
+```{r working, eval = F, include = F}
+dt_tidy[id_replicate == "19_14_dt_raw_mips_D7_NOTOTRUE_transfection1_SBFALSE_DNA_CNA_1_NA" & gene == "TBXT", ct]
+dt_tidy[id_replicate == "19_14_dt_raw_mips_D7_NOTOTRUE_transfection1_SBFALSE_DNA_CNA_1_NA" & gene == "GAPDH", ct]
+
+dt_tidy[exp == "19_14" & day == 7 & NOTO_mRNA == T & gene == "GAPDH" ]
+```
+
+
 # validate the clean data
 
 ```{r manual_check, results = "asis"}
@@ -400,7 +398,7 @@ if (length(orphan_data) > 0 ) {
 rules <- validate::validator(
    "replicate_levels" = replicate %vin% c(1,2, 3),
    "exp_year_levels" = exp_year %vin% c(2019,2020,2021, 2022,2023),
-   "clone_levels" = clone %vin% c("MIPS203.B11","CLONE A", "THERMO F", "THERMO F NEW", "190 PBMC", "H1"),
+   "clone_levels" = clone %vin% c("dt_raw_mips"),
    "day_levels" = day %in% c(0,2,3,5,7),
    var_bin := var_group(NOTO_mRNA, CHIR),
    "bin_test" = var_bin %vin% c(FALSE, TRUE),
