@@ -1,0 +1,43 @@
+## `r str_to_sentence("{{out}}")`
+
+```{r {{prefix}}-data-dist-param-working, eval = F, include=F}
+theoutcome <- "ct"
+```
+
+```{r {{prefix}}-data-dist-param}
+theoutcome <- "{{out}}"
+
+data_dist_cap <- paste0("**", str_to_sentence(theoutcome), "** distribution and violin plot for each exposure")
+
+box_hori_vec <- c("clone", "gene", "exp")
+
+box_verti_vec <- setdiff(exposures_vec, box_hori_vec)
+
+dt_tidy <- get(paste0("dt_tidy_", theoutcome))[!is.nan(get(theoutcome))]
+for (k in exposures_vec){
+   if (is.factor(dt_tidy[, get(k)])) {
+      dt_tidy[, c(k) := droplevels(get(k))]
+   }
+}
+```
+
+The data have `r nrow(dt_tidy)` {{out}} measures. 
+
+```{r {{prefix}}-data-dist-plot, fig.cap  = data_dist_cap, fig.asp = .9}
+layout(matrix(c(1,2,3,4,4,4,5,5,5,6,6,6), ncol = 4, byrow = F), widths = c(1,1,1))
+par(thepar)
+par(cex.axis = .5, mgp = c(1,0.2,0))
+
+hist(dt_tidy[, get(theoutcome)], xlab = theoutcome, main = "", col = "white")
+    
+cache = lapply(box_verti_vec, function(ex) {
+  vioplot::vioplot(get(theoutcome) ~ get(ex), data = dt_tidy, xlab = ex, ylab =  "", col = "grey80")
+})
+par(mar = c(2.5,4.5,.5,.5))
+cache = lapply(box_hori_vec, function(ex) {
+   vioplot::vioplot(get(theoutcome) ~ get(ex), data = dt_tidy, xlab = ex, ylab =  "", col = "grey80", horizontal = T, las = 1)
+})
+
+title(theoutcome, outer = T)
+```
+

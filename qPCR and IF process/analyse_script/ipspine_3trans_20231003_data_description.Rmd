@@ -1,0 +1,169 @@
+---
+title: Description of outcomes in the transfection data 20231003 of ipspine project
+author: Antoine Humeau
+date: '`r Sys.time()`'
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    highlight: tango
+    number_section: yes
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    keep_md: no
+    df_print: paged
+---
+<style>
+.main-container {width: 80%;max-width: inherit;}
+</style>
+
+# load
+
+```{r setup}
+source(file.path("..", "R_functions", "analyse_prelude.R"))
+
+input_data_folder <- file.path("..", "data","data_valid")
+input_data_name <- "ipspine_data_3trans_20231003_clean.csv"
+input_data_path <- file.path(input_data_folder, input_data_name)
+
+knitr::opts_chunk$set(dev = "svg")
+
+subset_raw_trans <- function(dt = dt_raw, cible = "ct"){
+  if (!cible %in% c("ct", "delta_ct", "delta_delta_ct", "fge", "log2_fge", "relative_count", "transfection_nb")) stop("cible must be ct, delta_ct or delta_delta_ct or relative_count")
+  if (cible == "ct") return(dt)
+  if (cible == "delta_ct") {
+    dt_sub <- dt[as.character(gene) != as.character(ct_control_gene)]
+    dt_sub[, gene := droplevels(gene)]
+    return(dt_sub)
+  }
+
+  if (cible %in% c( "delta_delta_ct", "fge", "log2_fge")) {
+    dt_sub <- dt[as.character(gene) != as.character(ct_control_gene) & day != 0,
+                 list(delta_delta_ct = mean(delta_delta_ct, na.rm  = T),
+                      fge = mean(fge, na.rm = T),
+                      log2_fge = mean(log2_fge, na.rm = T)), by = .(gene, sb, sb_conc, sb_day, transfection_nb, exp, clone, day, CHIR, NOTO_mRNA, extra_replicate)]
+    dt_sub[, gene := droplevels(gene)]
+    return(dt_sub)
+  }
+  if (cible == "relative_count") {
+    return(dt)
+  }
+}
+```
+
+The data to analyses are `r input_data_name` in the `r input_data_folder` folder. 
+
+```{r load-data}
+dt_raw <- data.table::fread(input_data_path, stringsAsFactors = T)
+
+logi_in_F <- colnames(dt_raw)[which(dt_raw[,lapply(.SD, is.logical)] == T)]
+for (k in logi_in_F) dt_raw[, c(k) := as.factor(get(k))]
+
+gene_combo_vec <- sort(levels(dt_raw$gene_combo))
+
+outcomes_vec <- c("ct", "delta_ct", "fge", "log2_fge")
+exposures_vec <- c("gene", "exp", "day", "clone", "NOTO_mRNA", "transfection_nb")
+
+for (ou in outcomes_vec) {
+   tmp_dt <- subset_raw_trans(dt_raw, cible = ou)
+   assign(paste0("dt_tidy_", ou), tmp_dt)
+}
+rm(tmp_dt)
+```
+
+The followings variables are outcomes: `r combine_words(outcomes_vec)`.
+The followings variables are explanatory variables: `r combine_words(exposures_vec)`.
+
+```{r, eval = F, include=  F}
+dt_tidy_log2_fge[gene == "SOX17", ]
+
+dt_raw[gene == "SOX17", .(exp, ct, log2_fge)]
+
+```
+
+# Outcome distribution by experimental variables
+
+```{r, results = "asis"}
+call_vioplot_1outcome <- function(out) {
+   prefix <- out
+   res <- knitr::knit_expand(file = file.path("templates","3trans","ipspine_3trans_20231003_analyses_template_vioplot_1outcome.Rmd"), out = out, prefix = prefix)
+   res2 = knitr::knit_child(text = res, quiet = TRUE)
+   cat(res2, sep = '\n')
+}
+cache = lapply(outcomes_vec, call_vioplot_1outcome)
+```
+
+# Supplemental figure 1A
+
+```{r {{prefix}}-bxp-stem, fig.cap = "Mean relative gene expression by gene in day 2 (blue) or day 7 (green). Error bar is one standard error of the mean"}
+col_pluri <-  "red4"
+col_wnt <- "red2"
+col_meso <- "green4"
+col_endo <- "orange"
+col_prim <- "pink"
+col_emt <- "purple"
+
+genes_paper2 <- c(
+                 NOTO_SYBR = col_meso, TBXT = col_meso, SHH = col_meso,
+                 NOGGIN = col_meso, SOX9 = col_meso, 
+                 FOXA2 = col_endo, SOX17 = col_endo
+                  )
+
+fig1b_gene <- c("NOTO_SYBR", "TBXT" , "SHH" ,  "NOGGIN" , "SOX9" , "FOXA2" , "SOX17"  )
+
+dt1b <- dt_tidy_log2_fge[gene %in% fig1b_gene & ( day == 2 | (day == 7 & NOTO_mRNA == T)), 
+                         list(Ndata = length(which(!is.na(log2_fge))),
+                              Nclone = length(unique(clone)),
+                              min = min(log2_fge, na.rm = T),
+                              max = max(log2_fge, na.rm = T),
+                              value = mean(log2_fge, na.rm = T),
+                              sd = sd(log2_fge, na.rm = T)),
+                                 .(gene, day, transfection_nb)][order(factor(gene, fig1b_gene), day)]
+
+dt1b[, se := sd/sqrt(Ndata)]
+dt1b[, xco := as.numeric(factor(transfection_nb, exclude = NULL, levels = c(NA,1,2,3))) + c(0.5, 0.5,0, -0.5)]
+dt1b[, xlab := as.character(transfection_nb)]
+dt1b[day == 2, xlab := "D2"]
+
+layout(matrix(1:8, ncol = 4))
+par(thepar)
+par(mar = c(3,1.5, 1.5,0.5), cex.axis = 0.8)
+
+cache = lapply(fig1b_gene, function(ge){
+
+   plot(1, 1, xlim = c(1, 4), ylim = c(0, max(dt1b[, value + se], dt1b[,  value - se])), type = "n", xlab = "", ylab = "", xaxt = "n", yaxs = "i")
+   
+   title(main = ge, cex.main = .75, line = 1, col.main = genes_paper2[ge])
+   
+   abline(h = log(100, base = 2), col = "grey", lty = 2)
+
+   rect(xleft = dt1b[gene == ge, xco - 0.15], xright = dt1b[gene == ge,xco + 0.15], ybottom = 0, ytop = dt1b[gene == ge, value], col = c("blue2", rep("green3", 3)))
+   arrows(x0 = dt1b[gene == ge,xco], y0 = dt1b[gene == ge, value - se], y1 = dt1b[gene == ge, value + se], code = 3, angle = 90, length = 0.05, lwd = 1)
+   axis(side = 1, at =  dt1b[gene == ge, xco], labels = dt1b[gene == ge, xlab])
+})
+```
+
+```{r {{prefix}}-tbl_stem, results = "asis"}
+dt1b2print <- copy(dt1b)
+colnames(dt1b2print)[colnames(dt1b2print) == "value"] <- "mean"
+wrap_dt(dt1b2print, caption =  "summary by gene and day of qPCR.  sd is standard deviation and se standard error of the mean. xco is the x coordinate in the figure")
+```
+
+```{r anova, results = "asis"}
+ano_l <- lapply(fig1b_gene, function(ge){
+   ano <- aov(log2_fge ~ transfection_nb, data = dt_tidy_log2_fge[gene == ge & day == 7 & NOTO_mRNA == T])
+   tab <- data.table(gene = ge, "F" = summary(ano)[[1]]$`F value`[1], p = summary(ano)[[1]]$`Pr(>F)`[1])
+   list(ano, tab)
+})
+#ano_l
+
+tab <- rbindlist(lapply(ano_l, function(k) k[[2]]))
+tab[, "F" := round(`F`, 2)]
+tab[, "p" := round(p, 3)]
+
+wrap_dt(tab, caption = "ANova by gene for different number of transfections")
+```
+
