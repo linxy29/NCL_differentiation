@@ -1,0 +1,239 @@
+---
+title: Description of outcomes in the quantification data 20230327 of ipspine project
+author: Antoine Humeau
+date: '`r Sys.time()`'
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    highlight: tango
+    number_section: yes
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    keep_md: no
+    df_print: paged
+---
+<style>
+.main-container {width: 80%;max-width: inherit;}
+</style>
+
+# load
+
+```{r setup}
+source(file.path("..", "R_functions", "analyse_prelude.R"))
+
+input_data_folder <- file.path("..", "data","data_valid")
+input_data_name <- "ipspine_data_quantification_20230327_clean.csv"
+input_data_path <- file.path(input_data_folder, input_data_name)
+
+knitr::opts_chunk$set(dev = "svg")
+```
+
+The data to analyses are `r input_data_name` in the `r input_data_folder` folder. 
+
+```{r load-data}
+dt_raw <- data.table::fread(input_data_path, stringsAsFactors = T)
+
+ordre_clone <- c("CLONE_A", "THERMO F", "190 PBMC")
+dt_raw[, clone := factor(clone, levels = ordre_clone)]
+
+logi_in_F <- colnames(dt_raw)[which(dt_raw[,lapply(.SD, is.logical)] == T)]
+for (k in logi_in_F) dt_raw[, c(k) := as.factor(get(k))]
+
+gene_combo_vec <- sort(levels(dt_raw$gene_combo))
+
+outcomes_vec <- c("relative_count")
+exposures_vec <- c("gene_ratio_name","gene_combo", "day", "exp", "clone", "day_NT")
+
+for (ou in outcomes_vec) {
+   tmp_dt <- subset_raw(dt_raw, cible = ou)
+   assign(paste0("dt_tidy_", ou), tmp_dt)
+}
+rm(tmp_dt)
+```
+
+The followings variables are outcomes: `r combine_words(outcomes_vec)`.
+The followings variables are explanatory variables: `r combine_words(exposures_vec)`.
+
+```{r, eval = F, include=  F}
+dim(dt_raw)
+dim(dt_tidy_relative_count)
+
+dt_raw[day == 7 & is.na(sb_day) & gene_combo == "T / FOXA2" & NOTO_mRNA == T, .N, id_experiment]
+dt_raw[day == 7 & is.na(sb_day) & gene_combo == "T / FOXA2" & NOTO_mRNA == T & !is.na(relative_count), .N, id_experiment]
+
+dt_raw[day == 7 & is.na(sb_day) & gene_combo == "T / FOXA2" & NOTO_mRNA == T & !is.na(relative_count), .N, id_experiment]
+
+dt_raw[day == 7 & is.na(sb_day) & gene_combo == "T / SOX9" & NOTO_mRNA == T & !is.na(relative_count), .N, id_experiment]
+
+dt_raw[gene_ratio_name == "T+ / FOXA2+" & day == 7 & NT == TRUE]
+
+dt_raw[str_detect(id_experiment, "(_[1-9])$"), .N]
+
+dt_raw[str_detect(id_experiment, "(_[1-9])$"), .N, .(clone, exp, gene_combo, day, sb_day)]
+```
+
+# Outcome distribution by experimental variables
+```{r, results = "asis"}
+call_vioplot_1outcome <- function(out) {
+   prefix <- out
+   res <- knitr::knit_expand(file = file.path("templates","quantification","ipspine_quantification_20230327_analyses_template_vioplot_1outcome.Rmd"), out = out, prefix = prefix)
+   res2 = knitr::knit_child(text = res, quiet = TRUE)
+   cat(res2, sep = '\n')
+}
+cache = lapply(outcomes_vec, call_vioplot_1outcome)
+```
+
+# Fig 1 D
+
+The shown data are D2 or D7 conditions.
+
+```{r {{prefix}}-param2, results = "hide"}
+theoutcome <- "relative_count"
+
+dt_plot <- dt_raw[(day == 7 | day == 2) & exp != "20_14" ]
+
+l_g0 <- dt_plot[, levels(gene_ratio_name)]
+
+nplus <- str_count(l_g0, "[+]")
+n_plusfirst <- str_count(l_g0, "[+] /")
+
+l_g1 <- c(l_g0[nplus == 0],
+  l_g0[n_plusfirst == 1 & nplus == 1],
+  l_g0[nplus == 2],
+  l_g0[n_plusfirst == 0 & nplus == 1])
+
+l_g2 <- c(l_g0[nplus == 0],
+  l_g0[n_plusfirst == 0 & nplus == 1],
+  l_g0[n_plusfirst == 1 & nplus == 1],
+  l_g0[nplus == 2])
+
+dt_plot[, gene_ratio_name := factor(gene_ratio_name, levels = l_g2)]
+
+gene_combo2_plot <- unique(dt_plot$gene_combo)
+day_nt_plot <- c("2", "7_NT", "7")
+
+fig_cap <- paste("Quantification of cells for", gene_combo2_plot, "for qPCR at day 2 or 7")
+
+col_moins_moins <- rgb(208,206,206, maxColorValue = 255)
+
+col_t_foxa2 <- paper <- c(col_moins_moins,  "red", rgb(169,112,211, maxColorValue = 255), rgb(19,182,93, maxColorValue = 255) )
+col_sox17_foxa2 <- paper <- c(col_moins_moins, "red", rgb(255,255,0, maxColorValue = 255), rgb(255,214,58, maxColorValue = 255))
+col_t_sox9 <- paper <- c(col_moins_moins,  rgb(217,22,175, maxColorValue = 255), rgb(169,112,211, maxColorValue = 255), rgb(44,162,95, maxColorValue = 255))
+
+xleg <- str_replace(day_nt_plot, "_NT", " NT")
+xleg[xleg != "Classical"] <- paste0("Day ", xleg[xleg != "Classical"])
+
+compute_rect_coord <- function(dt, col){
+   output <- dt[order(gene_ratio_name)]   
+   output$y1 <- cumsum(output$Mean)
+   output$y0 <- c(0, output[-.N, y1])
+   output$col <- col
+   return(output)
+}
+
+add_rect <- function(dt, x, width = 0.7, vertical = T ){
+   if (vertical) {
+      rect(xleft = x - 0.5*width, xright = x + 0.5 * width,  ybottom = dt$y0, ytop = dt$y1, col = dt$col, border = NA)   
+   }
+}
+```
+
+```{r {{prefix}}-plot2, fig.cap =  fig_cap}
+layout(matrix(1:2, ncol = 2), widths = c(1,.3))
+par(thepar)
+
+results <- lapply(gene_combo2_plot[], function(ge){
+   par(mar = c(3,3,1,0))
+    plot(1,1, type = "n", xlim = c(.5, length(day_nt_plot) + .5), ylim = c(0, 100), ylab = "Quantification", main = ge, xaxt = "n", xlab = "QPCR day", bty = "l")
+  
+   axis(side = 1 ,at = 1:length(day_nt_plot) + c(0,0.2,0), labels = xleg)
+
+   out <- lapply(day_nt_plot, function(da) {
+      thedt <- dt_plot[gene_combo == ge & day_NT == da]
+      
+      out <- thedt[, list(N = .N, 
+                          Mean = mean(relative_count, na.rm = T),
+                          Sem = sqrt(var(relative_count, na.rm = T)/ length(which(!is.na(relative_count)))),
+                          Min = min(relative_count, na.rm = T),
+                          Max= max(relative_count, na.rm = T)
+                          ), gene_ratio_name][order(gene_ratio_name)]
+      out[, gene_ratio_name := droplevels(gene_ratio_name)]
+      out[, day_nt := da]
+      out[, x := which(day_nt_plot == da)]
+      out[, x := x +  c(0, 0.2, 0)[x]]
+
+      thecol <- str_replace(paste0("col_", str_to_lower(ge)), " / ", "_")
+
+      out <- compute_rect_coord(out, col = get(thecol))
+      if (nrow(out) > 0) {
+         out$y_c <- (out$y0 + out$y1) / 2
+         add_rect(out, x = out$x)
+         text(x = out$x, y = out$y_c, labels = round(out$Mean,1), cex = 1)
+      }
+      out
+   })
+   par(mar = c(0,0,0,0))
+   plot.new()
+   
+   text_legend <- rev(out[[1]]$gene_ratio_name)
+   legend(x = "center", legend = text_legend, text.col = rev(out[[1]]$col), bty = "n")
+   rbindlist(out)
+})
+
+results <- rbindlist(results)
+
+rounding_var <- c("Mean", "Sem", "Min", "Max")
+results2print <- results[, .SD, .SDcols = c("gene_ratio_name", "day_nt", "N", rounding_var)]
+results2print[ , c(rounding_var) := lapply(.SD, function(k) format(k, digits = 1, nsmall = 1, width = 5)), .SDcols = rounding_var]
+
+wrap_dt(results2print, caption = "summary of previous figures") %>%
+  formatStyle(rounding_var, `text-align` = 'right')
+```
+
+Same figure without number inside the data
+```{r {{prefix}}-plot2b, fig.cap =  fig_cap}
+layout(matrix(1:2, ncol = 2), widths = c(1,.3))
+par(thepar)
+
+results <- lapply(gene_combo2_plot[], function(ge){
+   par(mar = c(3,3,1,0))
+    plot(1,1, type = "n", xlim = c(.5, length(day_nt_plot) + .5), ylim = c(0, 100), ylab = "Quantification", main = ge, xaxt = "n", xlab = "QPCR day", bty = "l")
+  
+   axis(side = 1 ,at = 1:length(day_nt_plot) + c(0,0.2,0), labels = xleg)
+
+   out <- lapply(day_nt_plot, function(da) {
+      thedt <- dt_plot[gene_combo == ge & day_NT == da]
+      
+      out <- thedt[, list(N = .N, 
+                          Mean = mean(relative_count, na.rm = T),
+                          Sem = sqrt(var(relative_count, na.rm = T)/ length(which(!is.na(relative_count)))),
+                          Min = min(relative_count, na.rm = T),
+                          Max= max(relative_count, na.rm = T)
+                          ), gene_ratio_name][order(gene_ratio_name)]
+      out[, gene_ratio_name := droplevels(gene_ratio_name)]
+      out[, day_nt := da]
+      out[, x := which(day_nt_plot == da)]
+      out[, x := x +  c(0, 0.2, 0)[x]]
+
+      thecol <- str_replace(paste0("col_", str_to_lower(ge)), " / ", "_")
+
+      out <- compute_rect_coord(out, col = get(thecol))
+      if (nrow(out) > 0) {
+         out$y_c <- (out$y0 + out$y1) / 2
+         add_rect(out, x = out$x)
+      }
+      out
+   })
+   par(mar = c(0,0,0,0))
+   plot.new()
+   
+   text_legend <- rev(out[[1]]$gene_ratio_name)
+   legend(x = "center", legend = text_legend, text.col = rev(out[[1]]$col), bty = "n")
+   rbindlist(out)
+})
+```
+
