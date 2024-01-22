@@ -27,6 +27,15 @@ boxplot_1gene_f <- function(dt, thegene, outcome, main = T, coltitle = "black", 
    thedt <- dt[gene == thegene & !is.na(get(outcome))]
    thedt[, clone := droplevels(clone)]
    
+   ano1 <- aov(get(outcome) ~ clone, data = thedt)
+   ano2 <- aov(get(outcome) ~ clone, data = thedt[clone != "H1"])
+   
+   clone2by2 <- t(combn(levels(thedt$clone), m = 2))
+   ttest2by2 <- sapply(1:nrow(clone2by2), function(j) {
+      t.test(get(outcome) ~ clone, data = thedt[clone %in% clone2by2[j,]], var.equal = F)$p.value
+   })
+   clone2by2 <- data.table(clone2by2, pvalue = ttest2by2)
+   
    means <- thedt[, list(N = .N, 
                          mean = mean(get(outcome), na.rm = T),
                          sd = sd(get(outcome), na.rm = T)), by = clone]
@@ -51,13 +60,14 @@ boxplot_1gene_f <- function(dt, thegene, outcome, main = T, coltitle = "black", 
    points(x = means$clone, y = means$mean, col = "#0570b0", pch = 16, cex = 1 )
 
    if (main == T) title(main = paste(thegene), outer = F, col.main = coltitle)
-   means   
+
+   list(desc = means, anova = ano1, anova_H1 = ano2, student = clone2by2)
 }
 ```
 
-## RT-qPCR figure sup
+## Supplemental figure 1B: RT-qPCR at day 7
 
-```{r {{prefix}}-bxp-gene-day-allclone, fig.cap  = "Fold-change relative to day 0 by gene (panels) and clone (x axis, (Number of data)). blue filled points are the means.", fig.asp =2, results="asis"}
+```{r {{prefix}}-bxp-gene-day-allclone-d7, fig.cap  = "D7 Fold-change relative to day 0 by gene (panels) and clone (x axis, (Number of data)). blue filled points are the means.", fig.asp =2, results="asis"}
 col_pluri <-  "red4"
 col_wnt <- "red2"
 col_meso <- "green4"
@@ -87,16 +97,29 @@ mtext(side = 2, text = "Fold-Change relative to day 0", outer = T)
 mtext(side = 1, text = "Clone", outer = T)
 ```
 
-## Tables of students test
+### Tables of description values
 
-```{r student-tables, results="asis", eval = T}
+```{r desc-aov-tables, results="asis", eval = T}
 print_student <- lapply(1:length(sumfc7), function(k) {
-   thetable <- copy(sumfc7[[k]])
+   thetable <- copy(sumfc7[[k]]$desc)
    thetable[, t95 := round(t95, 2)]
 
-   wrap_dt(thetable, caption = paste("summary of previous figure", names(genes_paper[k]) ))
-          })
+   wrap_dt(thetable, caption = paste0("summary of previous figure ", names(genes_paper[k]), ". Test of the means between the clones by Anova: p = ", summary(sumfc7[[k]]$anova)[[1]]$`Pr(>F)`[1], "; H1 clone excluded: p = ", summary(sumfc7[[k]]$anova_H1)[[1]]$`Pr(>F)`[1]  ))
+})
+   
 htmltools::tagList(print_student) 
+```
+
+```{r student2by2, results = "asis"}
+student2by2_l <- lapply(1:length(sumfc7), function(k) {
+   out <- copy(sumfc7[[k]]$student)
+   out[, pvalue := as.character(round(pvalue, 6))]
+   out[as.numeric(pvalue) < 0.05, pvalue := paste0("<b>", pvalue, "</b>") ]
+   colnames(out) <- c("clone 1", "clone 2", names(genes_paper)[k])
+   out
+})
+student2by2 <- Reduce(merge, student2by2_l)
+wrap_dt(student2by2, caption = "P value associated with a Student test with Welch correction to compare each paire of clones (rows) for different genes (columns)", escape = F)
 ```
 
 ## RT-qPCR figure 1B
@@ -141,5 +164,64 @@ dt1b2print <- copy(dt1b)
 colnames(dt1b2print)[colnames(dt1b2print) == "value"] <- "mean"
 wrap_dt(dt1b2print, caption =  "summary by gene and day of qPCR.  sd is standard deviation and se standard error of the mean. xco is the x coordinate in the figure")
 
+```
+
+## Supplemental figure 1B: RT-qPCR at day 2
+
+```{r {{prefix}}-bxp-gene-day-allclone-d2, fig.cap  = "D2 Fold-change relative to day 0 by gene (panels) and clone (x axis, (Number of data)). blue filled points are the means. day 2", fig.asp =2, results="asis"}
+col_pluri <-  "red4"
+col_wnt <- "red2"
+col_meso <- "green4"
+col_endo <- "orange"
+col_prim <- "pink"
+col_emt <- "purple"
+
+genes_paper <- c( 
+                 LEF1 = col_wnt, NODAL = col_wnt, LEFTY1 = col_wnt,
+                 TBXT = col_meso, SHH = col_meso,
+                 NOTO_SYBR = col_meso,
+                 NOGGIN = col_meso, SOX9 = col_meso, 
+                 FOXA2 = col_endo, SOX17 = col_endo,
+                 TBX6 = col_meso,
+                 POU5F1 = col_pluri, NANOG = col_pluri
+                  )
+
+autolayout(x = genes_paper, nc = 3, byrow = T)
+par(thepar)
+par(mar = c(4.5,1.5, 2,.5), cex.axis = .5, oma = c(1,1,0,0), cex.main = .7)
+
+sumfc2 <- lapply(1:length(genes_paper), function(k){
+   ge = names(genes_paper)[k]
+   thecol = genes_paper[k]
+   boxplot_1gene_f(dt = dt_tidy_log2_fge[NOTO_mRNA == F  & day == 2 & !is.na(log2_fge) & gene == ge], thegene = ge, outcome = "log2_fge", main = T, coltitle = thecol, ylab = "")      
+})
+
+mtext(side = 2, text = "Fold-Change relative to day 0", outer = T)
+mtext(side = 1, text = "Clone", outer = T)
+```
+
+### Tables of description values
+
+```{r desc-aov-tables2, results="asis", eval = T}
+print_student <- lapply(1:length(sumfc2), function(k) {
+   thetable <- copy(sumfc2[[k]]$desc)
+   thetable[, t95 := round(t95, 2)]
+
+   wrap_dt(thetable, caption = paste0("summary of previous figure ", names(genes_paper[k]), ". Test of the means between the clones by Anova: p = ", summary(sumfc2[[k]]$anova)[[1]]$`Pr(>F)`[1], "; H1 clone excluded: p = ", summary(sumfc2[[k]]$anova_H1)[[1]]$`Pr(>F)`[1]  ))
+})
+
+htmltools::tagList(print_student) 
+```
+
+```{r student2by2_b, results = "asis"}
+student2by2_l <- lapply(1:length(sumfc2), function(k) {
+   out <- copy(sumfc2[[k]]$student)
+   out[, pvalue := as.character(round(pvalue, 5))]
+   out[as.numeric(pvalue) < 0.05, pvalue := paste0("<b>", pvalue, "</b>") ]
+   colnames(out) <- c("clone 1", "clone 2", names(genes_paper)[k])
+   out
+})
+student2by2 <- Reduce(merge, student2by2_l)
+wrap_dt(student2by2, caption = "P value associated with a Student test with Welch correction to compare each paire of clones (rows) for different genes (columns)", escape = F)
 ```
 

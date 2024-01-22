@@ -1,5 +1,5 @@
 ---
-title: Cleaning of ipspine raw data with no SB treatment of june 10 2023
+title: Cleaning of ipspine raw data with SB treatment of october 10 2023
 author: Antoine Humeau
 date: '`r Sys.time()`'
 knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
@@ -31,7 +31,7 @@ source(file.path("..", "R_functions", "script_raw2transform_prelude.R"))
 
 ```{r path-parameters}
 input_data_folder <- file.path("..", "data","data_raw")
-input_data_name <- "ipspine_data_no_SB_20230610.xlsx"
+input_data_name <- "ipspine_data_SB_20231010.xlsx"
 input_data_path <- file.path(input_data_folder, input_data_name)
 
 output_data_folder <- file.path("..", "data", "data_valid")
@@ -61,21 +61,16 @@ The empty, "_" and "N/A" cells are dealt as NA. The sheet has sub-datasets begin
 # Extract and clean excel file
 
 ```{r cleaning-param}
-clone_names <- c("H9" = "H9", 
-                 "C19" = "C19", 
-                 "MIPS203.B11" = "MIPS", 
+clone_names <- c("MIPS203.B11" = "MIPS", 
                  "CLONE A" = "CLONE_A", 
+                 "CLONE A" = "CL,_A",
                  "THERMO F NEW" = "THERMO_F_NEW",
                  "THERMO F" = "THERMOF",
                  "THERMO F" = "THERMO_F",
+                 "THERMO F" = "TF", 
                  "190 PBMC" = "190__PBMC",
                  "190 PBMC" = "190_PBMC",
-                 "190 PBMC" = "190_4F_PBMC",
-                 "190 TIE2 4F" = "190_4F_TIE2", 
-                 "190 TIE2 6F" = "190_6F_TIE2",
-                 "192 TIE2 4F" = "192_4F_TIE2",
-                 "192 TIE2 6F" = "192_6F_TIE2",
-                 "H1" = "H1"
+                 "190 PBMC" = "190_4F_PBMC"
                )
 delta_ct_control_day <- 0 
 
@@ -301,7 +296,7 @@ cleaning_one_sheet <- function(dtname) {
 ```
 
 ```{r cleaning, results= "hide"}
-dt_tidy_l <- lapply(names_sheets_clean[1], function(k){
+dt_tidy_l <- lapply(names_sheets_clean, function(k){
    print(paste("Sheet", k))
    cleaning_one_sheet(paste0("dt_raw_", k))
 })
@@ -350,6 +345,31 @@ dt_clean2 <- merge(dt_clean, extract_delta_ct, by = c("exp_clone", "gene"), all 
 dt_clean2[, delta_delta_ct := delta_ct - delta_ct_control]
 dt_clean2[, fge := 2^(-delta_delta_ct)]
 dt_clean2[, log2_fge := log(100*fge, base = 2)]
+```
+
+```{r working-check, eval = F,include = F}
+error_control_ct
+colnames(dt_tidy)
+
+dt_tidy[exp == "20_31" & clone == "MIPS203.B11" & day == 7 & NOTO_mRNA == T & sb == T & sb_day == 2 & sb_conc == 5 & ct_control_gene == "GAPDH_SYBR"]
+
+dt_tidy[exp == "20_31" & clone == "MIPS203.B11" & day == 7 & NOTO_mRNA == T & sb == T & sb_day == 2 & sb_conc == 5, .N, gene]
+
+dt_tidy[,.N, sb_day]
+
+dt_tidy[sb_day == 1, .N, Echantillon]
+dt_tidy[sb_day == 5, .N, Echantillon]
+
+dt_tidy[, .N, gene]
+
+dt_tidy[gene %in% c("NOTO", "NOTO_SYBR", "NOTO_SYBR_SYBR"),.N]
+
+dt_tidy[gene %in% c("NOTO", "NOTO_SYBR", "NOTO_SYBR_SYBR"),.N, .(exp, clone)]
+
+dt_tidy[gene %in% c("NOTO_SYBR_SYBR"),.N]
+
+dt_tidy[gene %in% c("NOTO_SYBR_SYBR"),.N, .(exp, clone)]
+
 ```
 
 # validate the clean data
@@ -405,9 +425,9 @@ rules <- validate::validator(
    var_bin := var_group(NOTO_mRNA, CHIR),
    "bin_test" = var_bin %vin% c(FALSE, TRUE),
    "ct_range" = in_range(ct, 1, 40),
-   "sb_day_levels" = is.na(sb_day),
-   "sb_conc_levels" = is.na(sb_conc),
-    "sb_false" = sb == FALSE, 
+   "sb_day_levels" = is.na(sb_day) | sb_day %vin% c(1,2,3,5),
+   "sb_conc_levels" = is.na(sb_conc) | sb_conc %vin% c(5,10),
+    "sb_false" = sb %vin% c(FALSE, TRUE), 
     "cause_na_levels" = cause_na %vin% c("unmeasure", "out-of-range") | is.na(cause_na))
 
 check_tidy <- validate::confront(dt_clean2, rules)

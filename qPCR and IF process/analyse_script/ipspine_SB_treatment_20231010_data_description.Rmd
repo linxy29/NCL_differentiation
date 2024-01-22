@@ -1,0 +1,155 @@
+---
+title: Description of outcomes of the SB treatment data 20231010 of ipspine project
+author: Antoine Humeau
+date: '`r Sys.time()`'
+knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
+output: 
+  html_document:
+    code_folding: hide
+    fig_caption: yes
+    highlight: tango
+    number_section: yes
+    theme: cosmo
+    toc: yes
+    toc_float: yes
+    toc_depth: 4
+    keep_md: no
+    df_print: paged
+---
+<style>
+.main-container {width: 80%;max-width: inherit;}
+</style>
+
+# load
+
+```{r setup}
+source(file.path("..", "R_functions", "analyse_prelude.R"))
+
+input_data_folder <- file.path("..", "data","data_valid")
+input_data_name <- "ipspine_data_SB_20231010_clean.csv"
+input_data_path <- file.path(input_data_folder, input_data_name)
+
+knitr::opts_chunk$set(dev = "svg")
+```
+
+The data to analyses are `r input_data_name` in the `r input_data_folder` folder. 
+
+```{r load-data}
+dt_raw <- data.table::fread(input_data_path, stringsAsFactors = T)
+
+ordre_clone <- c("THERMO F" = "hiPSC a","190 PBMC" = "hiPSC b", "THERMO F NEW" = "hiPSC c",  "CLONE A" = "hiPSC d", "MIPS203.B11" = "hiPSC e", "H1" = "H1")
+dt_raw[, clone := factor(clone, levels = names(ordre_clone), labels = ordre_clone)]
+
+logi_in_F <- colnames(dt_raw)[which(dt_raw[,lapply(.SD, is.logical)] == T)]
+for (k in logi_in_F) dt_raw[, c(k) := as.factor(get(k))]
+
+gene_combo_vec <- sort(levels(dt_raw$gene_combo))
+
+outcomes_vec <- c("ct", "delta_ct", "fge", "log2_fge")
+exposures_vec <- c("gene", "exp", "day", "clone", "NOTO_mRNA")
+
+for (ou in outcomes_vec) {
+   tmp_dt <- subset_raw(dt_raw, cible = ou)
+   assign(paste0("dt_tidy_", ou), tmp_dt)
+}
+rm(tmp_dt)
+```
+
+The followings variables are outcomes: `r combine_words(outcomes_vec)`.
+The followings variables are explanatory variables: `r combine_words(exposures_vec)`.
+
+```{r, eval = F, include=  F}
+dt_tidy_log2_fge[gene == "SOX17", ]
+
+dt_raw[gene == "SOX17", .(exp, ct, log2_fge)]
+
+```
+
+# Outcome distribution by experimental variables
+
+```{r, results = "asis"}
+call_vioplot_1outcome <- function(out) {
+   prefix <- out
+   res <- knitr::knit_expand(file = file.path("templates","SB_treatment","ipspine_SB_treatment_20231010_analyses_template_vioplot_1outcome.Rmd"), out = out, prefix = prefix)
+   res2 = knitr::knit_child(text = res, quiet = TRUE)
+   cat(res2, sep = '\n')
+}
+cache = lapply(outcomes_vec, call_vioplot_1outcome)
+```
+
+# Supplemental 2E
+
+```{r {{prefix}}-bxp-stem, fig.cap = "Mean relative gene expression by gene in day 7 for no sb (blue) or sb at day 2 (concentration 5) (green). Error bar is one standard error of the mean"}
+col_pluri <-  "red4"
+col_wnt <- "red2"
+col_meso <- "green4"
+col_endo <- "orange"
+col_prim <- "pink"
+col_emt <- "purple"
+col_cardia <- "black"
+
+genes_paper2 <- c(
+                 NOTO_SYBR = col_meso, TBXT = col_meso, SHH = col_meso,
+                 NOGGIN = col_meso, SOX9 = col_meso, 
+                 FOXA2 = col_endo, SOX17 = col_endo, HAND1 = col_cardia, PRRX1 = col_cardia, GATA4 = col_endo
+                  ) 
+
+fig1b_gene <- c("NOTO_SYBR", "TBXT" , "HAND1" ,  "PRRX1" , "GATA4" , "SOX17")
+
+dt1b <- dt_tidy_log2_fge[gene %in% fig1b_gene & (day == 7 & NOTO_mRNA == T) & (sb == FALSE | (sb_day == 2 & sb_conc == 5)), 
+                         list(Ndata = length(which(!is.na(log2_fge))),
+                              Nclone = length(unique(clone)),
+                              min = min(log2_fge, na.rm = T),
+                              max = max(log2_fge, na.rm = T),
+                              value = mean(log2_fge, na.rm = T),
+                              sd = sd(log2_fge, na.rm = T)),
+                                 .(gene, sb)][order(factor(gene, fig1b_gene), sb)]
+
+dt1b[, se := sd/sqrt(Ndata)]
+dt1b[, xco := as.numeric(factor(gene, fig1b_gene)) + c(-0.2, .2)]
+
+layout(1)
+par(thepar)
+par(mar = c(3,1.5, 1.5,0.5), cex.axis = 0.8)
+
+plot(1, 1, xlim = range(dt1b$xco), ylim = c(0, max(dt1b[, value + se], dt1b[,  value - se])), type = "n", xlab = "", ylab = "", xaxt = "n", yaxs = "i")
+   
+abline(h = log(100, base = 2), col = "grey", lty = 2)
+
+rect(xleft = dt1b[, xco - 0.15], xright = dt1b[,xco + 0.15], ybottom = 0, ytop = dt1b[, value], col = c("#99d8c9","green3"))
+
+arrows(x0 = dt1b[,xco], y0 = dt1b[, value - se], y1 = dt1b[, value + se], code = 3, angle = 90, length = 0.05, lwd = 1)
+
+cache = sapply(1:length(fig1b_gene), function(k) {
+   axis(side = 1, at = k, fig1b_gene[k], col.axis = genes_paper2[fig1b_gene[k]], cex.axis = .5)})
+```
+
+```{r {{prefix}}-tbl_stem, results = "asis"}
+dt1b2print <- copy(dt1b)
+colnames(dt1b2print)[colnames(dt1b2print) == "value"] <- "mean"
+wrap_dt(dt1b2print, caption =  "summary by gene and day of qPCR.  sd is standard deviation and se standard error of the mean. xco is the x coordinate in the figure")
+```
+
+```{r anova, results = "asis"}
+ano_l <- lapply(fig1b_gene, function(ge){
+    ano <- t.test(log2_fge ~ sb, data = dt_tidy_log2_fge[gene == ge & (day == 7 & NOTO_mRNA == T) & (sb == FALSE | (sb_day == 2 & sb_conc == 5))], var.equal = T)
+   tab <- data.table(gene = ge, "t" = ano$statistic, p = ano$p.value)
+   list(ano, tab)
+})
+
+tab <- rbindlist(lapply(ano_l, function(k) k[[2]]))
+tab[, "t" := round(`t`, 2)]
+#tab[, "p" := round(p, 5)]
+
+wrap_dt(tab, caption = "Student test by gene for SB at day 2 vs no SB")
+```
+
+```{r, eval = F, include = F}
+dt_tidy_log2_fge[gene == "NOTO_SYBR" & (day == 7 & NOTO_mRNA == T) & ( sb_day == 2)]
+
+dt_tidy_log2_fge[gene == "NOTO_SYBR" & (day == 7 & NOTO_mRNA == T) & (sb_day == 2), .N, clone ]
+
+dt_raw[gene == "NOTO_SYBR" & (day == 7 & NOTO_mRNA == T) & (sb == FALSE), .(Echantillon, ct, gene) ]
+
+```
+

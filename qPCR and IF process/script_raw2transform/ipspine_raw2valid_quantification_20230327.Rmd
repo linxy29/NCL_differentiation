@@ -1,5 +1,5 @@
 ---
-title: Cleaning of ipsinie quantification raw data of 27 march 2023
+title: Cleaning of ipspine quantification raw data of 27 march 2023
 author: Antoine Humeau
 date: '`r Sys.time()`'
 knit: (function(inputFile, encoding) { rmarkdown::render(inputFile, encoding = encoding, output_dir = "../reports") }) 
